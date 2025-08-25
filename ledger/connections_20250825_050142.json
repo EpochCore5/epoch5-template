@@ -1,0 +1,20 @@
+[
+  {
+    "from_node": "node_5825e823",
+    "to_node": "node_9e869969",
+    "weight": 0.9525795927182782,
+    "established_at": "2025-08-25T05:01:42Z"
+  },
+  {
+    "from_node": "node_c42c51db",
+    "to_node": "node_9e869969",
+    "weight": 0.8325983420257828,
+    "established_at": "2025-08-25T05:01:42Z"
+  },
+  {
+    "from_node": "node_c42c51db",
+    "to_node": "node_5825e823",
+    "weight": 0.8910000101740836,
+    "established_at": "2025-08-25T05:01:42Z"
+  }
+]

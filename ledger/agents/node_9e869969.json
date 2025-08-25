@@ -1,0 +1,13 @@
+{
+  "node_id": "node_9e869969",
+  "capabilities": [
+    "blackboard.merge",
+    "crypto.verify"
+  ],
+  "created_at": "2025-08-25T05:01:42Z",
+  "status": "active",
+  "metadata": {
+    "seed": "TestSeed",
+    "founder_note": "Test run"
+  }
+}

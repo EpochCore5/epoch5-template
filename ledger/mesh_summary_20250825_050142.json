@@ -1,0 +1,18 @@
+{
+  "mesh_id": "mesh_a0dcb07b3dba",
+  "build_timestamp": "2025-08-25T05:01:42Z",
+  "node_count": 3,
+  "connection_count": 3,
+  "capabilities_used": [
+    "crypto.verify",
+    "mesh.route",
+    "blackboard.merge"
+  ],
+  "content_hash": "a8d3260fdf38c15cf8bc4596346a653a5078ff467cb7ca9c115f351966f2107a",
+  "signature": "8120ce26505fa157790b41ce9e3bf78470753326858d59ef35db61182e25ca16",
+  "files_generated": {
+    "mesh_config": "./ledger/mesh_config_20250825_050142.json",
+    "connections": "./ledger/connections_20250825_050142.json",
+    "agents_dir": "./ledger/agents"
+  }
+}

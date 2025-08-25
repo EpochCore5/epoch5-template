@@ -12,21 +12,15 @@ set -euo pipefail
 ARC_ID="EPOCH5-M1"
 
 P1_TITLE="Anchor — Core walls-off revelations"
-read -r -d '' P1_PAYLOAD <<'EOF'
-[PASTE PASS 1 PAYLOAD HERE]
-EOF
+P1_PAYLOAD="[PASTE PASS 1 PAYLOAD HERE]"
 P1_NOTE="Founder note for Pass 1 — why this is the spine."
 
 P2_TITLE="Amplify — Refinements & supporting capsules"
-read -r -d '' P2_PAYLOAD <<'EOF'
-[PASTE PASS 2 PAYLOAD HERE]
-EOF
+P2_PAYLOAD="[PASTE PASS 2 PAYLOAD HERE]"
 P2_NOTE="Founder note for Pass 2 — how it deepens the arc."
 
 P3_TITLE="Crown — Emotional closure & arc binding"
-read -r -d '' P3_PAYLOAD <<'EOF'
-[PASTE PASS 3 PAYLOAD HERE]
-EOF
+P3_PAYLOAD="[PASTE PASS 3 PAYLOAD HERE]"
 P3_NOTE="Founder note for Pass 3 — the connective seal for Eli."
 
 DELAY_HOURS_P1_P2="${DELAY_HOURS_P1_P2:-6}"
@@ -80,8 +74,23 @@ pre_ingest_check() {
   heartbeat "$1"
 }
 
-write_manifest() {
-  local pass_id="$1" title="$2" payload="$3" note="$4"
-  local stamp content_hash p_hash record_body record_hash man_file
-  stamp="$(ts)"
-  content_hash="$(sha256 "$ARC_ID|$pass_id|$stamp|$title|$payload|$note")"
+########################################
+# PYTHON SCRIPT INTEGRATION
+########################################
+
+echo "EPOCH5 Script with Integrated Python Automation"
+echo "Starting automated mesh building and execution logging..."
+
+# Ensure output directories exist
+ensure_dirs
+
+# Run the Mesh Builder
+echo "Running Mesh Builder..."
+python3 mesh_builder.py
+
+# Run the Mesh Execution Logger  
+echo "Running Mesh Execution Logger..."
+python3 mesh_exec_logger.py
+
+echo "Python automation completed successfully!"
+echo "Check './ledger' directory for generated files."
