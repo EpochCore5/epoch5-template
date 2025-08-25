@@ -1,0 +1,19 @@
+# Generated data directories and files
+cas/
+archives/
+ledger_main.jsonl
+mesh_blackboard.json
+mesh_merkle_tlsar.json
+
+# Temporary test files
+test_*.txt
+*.tmp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# System files
+.DS_Store
+Thumbs.db
