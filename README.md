@@ -28,15 +28,43 @@ The foundational Bash script providing:
 DELAY_HOURS_P1_P2=0 DELAY_HOURS_P2_P3=0 ./epoch5.sh
 ```
 
-### 2. Agent Management (`agent_management.py`)
-Handles decentralized agent lifecycle:
+### 2. Enhanced Agent Management (`agent_management.py`)
+**🔒 NEW: Cryptographic Identity & Security Features**
+
+Advanced agent lifecycle management with robust security:
 
 ```python
-# Create and register an agent
-python3 agent_management.py --create python data_processing ml_ops
+# Create agent with cryptographic identity
+python3 agent_management.py create --skills python cryptography security --type security-agent
 
-# List all agents
-python3 agent_management.py --list
+# List active agents with enhanced formatting  
+python3 agent_management.py list --active-only
+
+# Verify agent integrity and cryptographic identity
+python3 agent_management.py verify --did did:epoch5:agent:abc123
+
+# Log anomalies with severity-based classification
+python3 agent_management.py anomaly --did did:epoch5:agent:abc123 --type performance --severity high --details "High latency detected"
+
+# Get comprehensive agent statistics
+python3 agent_management.py stats --did did:epoch5:agent:abc123
+
+# Update task statistics with history tracking
+python3 agent_management.py update-stats --did did:epoch5:agent:abc123 --success --latency 2.5 --task-type security-scan
+
+# Create provenance records for audit trails
+python3 agent_management.py provenance --did did:epoch5:agent:abc123 --action "task_completed" --details '{"result": "success"}'
+```
+
+**Enhanced Security Features:**
+- **RSA Cryptographic Identity**: Each agent gets 2048-bit RSA key pairs with secure storage
+- **Message Signing & Verification**: Full cryptographic signing and verification capabilities  
+- **Severity-Based Anomalies**: Four levels (low, medium, high, critical) with automatic deactivation
+- **Thread Safety**: Mutex locks and atomic operations for concurrent access
+- **Backup & Recovery**: Automatic registry backup with recovery mechanisms
+- **Integrity Verification**: Hash validation and cryptographic identity verification
+- **Provenance Tracking**: Signed audit trails for all agent actions
+- **Task History**: Limited-buffer task tracking (1000 global, 100 per agent)
 
 # Log heartbeat
 python3 agent_management.py --heartbeat did:epoch5:agent:abc123
@@ -243,7 +271,7 @@ python3 integration.py run-workflow
 ```
 epoch5-template/
 ├── epoch5.sh                 # Core EPOCH5 Bash script
-├── agent_management.py       # Agent DID and registry system
+├── agent_management.py       # Enhanced Agent DID and registry system 🔒
 ├── policy_grants.py          # Policy enforcement and grants
 ├── dag_management.py         # DAG creation and execution
 ├── cycle_execution.py        # Cycle management with PBFT consensus
@@ -253,7 +281,14 @@ epoch5-template/
 ├── README.md               # This documentation
 └── archive/               # Runtime data directory
     └── EPOCH5/           # System data storage
-        ├── agents/       # Agent registry and logs
+        ├── agents/       # Enhanced agent registry and logs 🔒
+        │   ├── keys/     # RSA key storage (secure permissions) 🔒
+        │   ├── backups/  # Automatic registry backups 🔒
+        │   ├── registry.json         # Agent registry with integrity hashes
+        │   ├── anomalies.log         # Severity-based anomaly log
+        │   ├── integrity.log         # Identity verification log 🔒
+        │   ├── agent_management.log  # Enhanced system logging
+        │   └── *_provenance.log      # Per-agent provenance trails 🔒
         ├── policies/     # Policy and grant definitions
         ├── dags/         # DAG definitions and execution logs
         ├── cycles/       # Cycle execution data
@@ -265,6 +300,7 @@ epoch5-template/
         ├── ledger.log    # Main provenance ledger
         └── heartbeat.log # System heartbeat log
 ```
+🔒 = New enhanced security features
 
 ## Architecture Integration
 
@@ -278,6 +314,16 @@ All components integrate through the EPOCH5 foundation:
 
 ## Security Features
 
+**🔒 Enhanced Security (NEW):**
+- **RSA Cryptographic Identity** for all agents with 2048-bit key pairs
+- **Message Signing & Verification** with PSS padding and SHA-256
+- **Severity-Based Anomaly Detection** with automatic deactivation
+- **Thread-Safe Operations** with mutex locks and atomic writes
+- **Backup & Recovery** with automatic file backup before critical operations
+- **Provenance Tracking** with cryptographically signed audit trails
+- **Integrity Verification** with hash validation and identity verification
+
+**Existing Security Features:**
 - **Multi-signature approval** for critical operations
 - **Quorum requirements** for consensus decisions
 - **Rate limiting** to prevent abuse
@@ -334,7 +380,10 @@ python3 integration.py status > audit_report.json
 - **Python 3.7+** for all Python components
 - **Bash 4.0+** for epoch5.sh
 - **openssl** or **shasum** for hashing (usually pre-installed)
+- **cryptography** library for RSA operations (`pip install cryptography`) 🔒
 - **Optional**: NetworkX for advanced DAG validation (`pip install networkx`)
+
+**🔒 New**: The enhanced agent management system requires the `cryptography` library for RSA key generation, signing, and verification capabilities.
 
 ## Getting Started
 
