@@ -1,0 +1,48 @@
+{
+  "base_directory": "./archive/EPOCH5",
+  "logging": {
+    "level": "INFO",
+    "directory": "./archive/EPOCH5/logs",
+    "enable_console": true,
+    "enable_file": true,
+    "max_file_size_mb": 10,
+    "backup_count": 5
+  },
+  "performance": {
+    "batch_size": 100,
+    "max_workers": 4,
+    "timeout_seconds": 300,
+    "enable_async": true,
+    "cache_enabled": true,
+    "cache_size": 1000
+  },
+  "security": {
+    "enable_backup": true,
+    "max_retries": 3,
+    "validation_enabled": true,
+    "hash_algorithm": "sha256",
+    "enable_encryption": false
+  },
+  "sla_defaults": {
+    "min_success_rate": 0.95,
+    "max_failure_rate": 0.05,
+    "max_retry_count": 3,
+    "timeout_seconds": 300,
+    "enable_monitoring": true
+  },
+  "agent_defaults": {
+    "reliability_threshold": 0.8,
+    "heartbeat_interval_seconds": 30,
+    "max_idle_time_seconds": 300
+  },
+  "dag_defaults": {
+    "enable_mesh_topology": true,
+    "fault_tolerance_level": 2,
+    "enable_networkx": false
+  },
+  "cycle_defaults": {
+    "enable_pbft_consensus": true,
+    "required_validator_ratio": 0.67,
+    "consensus_timeout_seconds": 60
+  }
+}
