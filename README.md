@@ -1,186 +1,82 @@
-# EPOCH5 Template - Enhanced Integration System
+# EPOCH5 Template - Core Ledger System
 
-A comprehensive tool for logging, agent management, policy enforcement, and secure execution of tasks with advanced provenance tracking.
+One-shot Bash capsule for EPOCH 5 — sealed payloads, manifest logging, and Unity Seal.
 
 ## Overview
 
-The EPOCH5 Template provides a complete ecosystem for:
+The EPOCH5 Template provides a focused system for:
 
-- **Advanced Logging & Provenance**: Hash-chained ledger system with tamper-evident records
-- **Agent Management**: Decentralized identifiers (DIDs), registry, and real-time monitoring  
-- **Policy & Security**: Rule enforcement with quorum requirements and multi-signature approvals
-- **DAG Management**: Directed Acyclic Graph execution with fault-tolerant mechanisms
-- **Cycle Execution**: Budget control, latency tracking, and PBFT consensus
-- **Data Integrity**: Capsule storage with Merkle tree proofs and ZIP archiving
-- **Meta-Capsules**: Comprehensive system state capture and ledger integration
+- **Core EPOCH5 System**: Triple-pass capsule processing with hash-chained provenance
+- **Manifest Logging**: Automated manifest generation with timestamped records
+- **Unity Seal**: Final sealing and archiving for complete provenance chains
+- **Data Integrity**: Capsule storage with Merkle tree proofs and hash verification
+- **System State Capture**: Meta-capsules for comprehensive system snapshots
 
 ## Components
 
 ### 1. Core EPOCH5 System (`epoch5.sh`)
-The foundational Bash script providing:
-- Triple-pass capsule processing (Anchor → Amplify → Crown)
-- Hash-chained provenance tracking
-- Manifest generation and Unity Seal creation
-- Configurable delays between passes
+The foundational Bash script providing triple-pass capsule processing:
 
 ```bash
-# Run EPOCH5 with custom delays
+# Run EPOCH5 with custom delays (default: 6 hours between passes)
 DELAY_HOURS_P1_P2=0 DELAY_HOURS_P2_P3=0 ./epoch5.sh
-```
 
-### 2. Agent Management (`agent_management.py`)
-Handles decentralized agent lifecycle:
-
-```python
-# Create and register an agent
-python3 agent_management.py --create python data_processing ml_ops
-
-# List all agents
-python3 agent_management.py --list
-
-# Log heartbeat
-python3 agent_management.py --heartbeat did:epoch5:agent:abc123
-
-# Report anomaly
-python3 agent_management.py --anomaly did:epoch5:agent:abc123 "timeout" "Task execution timeout"
+# Use custom payload content
+P1_PAYLOAD="Your Pass 1 content" P2_PAYLOAD="Your Pass 2 content" P3_PAYLOAD="Your Pass 3 content" ./epoch5.sh
 ```
 
 **Features:**
-- DID generation for agents
-- Skill-based registry with reliability scoring
-- Heartbeat monitoring and anomaly detection
-- Performance metrics tracking
+- **Triple-Pass Processing**: Anchor → Amplify → Crown structure
+- **Hash-Chained Provenance**: Each pass builds on the previous hash
+- **Manifest Generation**: Automated manifest files with metadata
+- **Unity Seal Creation**: Final seal with completion status
+- **Configurable Delays**: Customizable timing between passes
 
-### 3. Policy & Grant System (`policy_grants.py`)
-Enforces security through configurable policies:
+**Generated Files:**
+- `./archive/EPOCH5/manifests/E5-P1_manifest.txt` - Pass 1 manifest
+- `./archive/EPOCH5/manifests/E5-P2_manifest.txt` - Pass 2 manifest
+- `./archive/EPOCH5/manifests/E5-P3_manifest.txt` - Pass 3 manifest
+- `./archive/EPOCH5/ledger.log` - Complete provenance ledger
+- `./archive/EPOCH5/unity_seal.txt` - Final unity seal
+- `./archive/EPOCH5/heartbeat.log` - System heartbeat log
 
-```python
-# Create quorum policy
-python3 policy_grants.py create-policy "critical_ops" "quorum" '{"required_count": 3}'
+### 2. Capsule & Metadata Management (`capsule_metadata.py`)
+Data integrity and archiving with Merkle tree proofs:
 
-# Create multi-signature policy  
-python3 policy_grants.py create-policy "deploy" "multi_sig" '{"required_signatures": 2, "authorized_signers": ["signer1", "signer2", "signer3"]}'
-
-# Create access grant
-python3 policy_grants.py create-grant "data_access_1" "did:epoch5:agent:abc123" "database" "read" "write"
-
-# Evaluate policy
-python3 policy_grants.py evaluate "critical_ops" '{"approvers": ["user1", "user2", "user3"]}'
-```
-
-**Policy Types:**
-- **Quorum**: Require N approvers
-- **Multi-Signature**: Require M-of-N signatures
-- **Rate Limiting**: Control request frequency
-- **Skill Requirements**: Ensure agent capabilities
-- **Trust Thresholds**: Minimum reliability scores
-
-### 4. DAG Management (`dag_management.py`)
-Creates and executes task graphs:
-
-```python
-# Create tasks definition file
-cat > tasks.json <<EOF
-{
-  "description": "Data processing pipeline",
-  "tasks": [
-    {
-      "task_id": "extract",
-      "command": "extract_data --source db",
-      "dependencies": [],
-      "required_skills": ["database", "etl"]
-    },
-    {
-      "task_id": "transform", 
-      "command": "transform_data --input raw_data.csv",
-      "dependencies": ["extract"],
-      "required_skills": ["python", "data_processing"]
-    },
-    {
-      "task_id": "load",
-      "command": "load_data --target warehouse", 
-      "dependencies": ["transform"],
-      "required_skills": ["database", "etl"]
-    }
-  ]
-}
-EOF
-
-# Create and execute DAG
-python3 dag_management.py create "etl_pipeline" tasks.json
-python3 dag_management.py execute "etl_pipeline"
-python3 dag_management.py status "etl_pipeline"
-```
-
-**Features:**
-- Cycle detection and DAG validation
-- Mesh connectivity for fault tolerance
-- Task dependency resolution
-- Execution monitoring and logging
-
-### 5. Cycle Execution (`cycle_execution.py`)
-Manages execution cycles with SLA enforcement:
-
-```python
-# Create task assignments
-cat > assignments.json <<EOF
-{
-  "assignments": [
-    {"task_id": "process_batch_1", "agent_did": "did:epoch5:agent:worker1", "estimated_cost": 25.0},
-    {"task_id": "process_batch_2", "agent_did": "did:epoch5:agent:worker2", "estimated_cost": 30.0}
-  ],
-  "sla_requirements": {
-    "min_success_rate": 0.95,
-    "max_failure_rate": 0.05,
-    "max_retry_count": 3
-  }
-}
-EOF
-
-# Create and execute cycle
-python3 cycle_execution.py create "batch_process_cycle" 100.0 300.0 assignments.json
-python3 cycle_execution.py execute "batch_process_cycle" --validators validator1 validator2 validator3
-python3 cycle_execution.py sla "batch_process_cycle"
-```
-
-**Features:**
-- Budget and latency constraints
-- PBFT consensus for decisions
-- SLA monitoring and violation detection
-- Resource usage tracking
-
-### 6. Capsule & Metadata Management (`capsule_metadata.py`)
-Provides data integrity and archiving:
-
-```python
-# Create data capsule
+```bash
+# Create data capsule with integrity protection
 echo "Important data content" > data.txt
 python3 capsule_metadata.py create-capsule "data_v1" data.txt --metadata '{"version": "1.0", "type": "dataset"}'
 
-# Verify integrity
+# Verify data integrity
 python3 capsule_metadata.py verify "data_v1"
 
 # Create metadata linking capsules
 python3 capsule_metadata.py create-metadata "batch_metadata" "data_v1" "processed_v1" --metadata '{"batch_id": "2024001"}'
 
-# Create archive
+# Create archive with multiple capsules
 python3 capsule_metadata.py create-archive "release_archive" "data_v1" "processed_v1"
+
+# List all capsules and archives
+python3 capsule_metadata.py list-capsules
+python3 capsule_metadata.py list-archives
 ```
 
 **Features:**
-- Merkle tree integrity proofs
-- Content hash verification
-- Metadata relationship tracking
-- ZIP archive creation with hashing
+- **Merkle Tree Integrity**: Cryptographic proofs for data blocks
+- **Content Hash Verification**: SHA256 hashing for tamper detection
+- **Metadata Relationships**: Link capsules with structured metadata
+- **ZIP Archive Creation**: Secure packaging with integrity hashes
+- **Block-Level Proofs**: Verify individual data blocks within capsules
 
-### 7. Meta-Capsule System (`meta_capsule.py`)
-Captures comprehensive system state:
+### 3. Meta-Capsule System (`meta_capsule.py`)
+Comprehensive system state capture and archiving:
 
-```python
-# Create meta-capsule of entire system
+```bash
+# Create complete system snapshot
 python3 meta_capsule.py create "system_state_2024_001" --description "Quarterly system snapshot"
 
-# Verify meta-capsule
+# Verify meta-capsule integrity
 python3 meta_capsule.py verify "system_state_2024_001"
 
 # View current system state
@@ -191,150 +87,113 @@ python3 meta_capsule.py list
 ```
 
 **Features:**
-- Full system state capture
-- Multi-system integration
-- Provenance chain building
-- Comprehensive archiving
+- **Complete System State**: Captures ledger, manifests, capsules, and Unity Seal
+- **Provenance Chain Building**: Links all system operations in chronological order
+- **System Archive Creation**: ZIP packaging of entire system state
+- **Integrity Verification**: Multi-level validation of captured data
+- **Ledger Integration**: Updates main ledger with meta-capsule records
 
-### 8. Integration System (`integration.py`)
-Unified orchestration interface:
+## Architecture
 
-```python
-# Set up complete demo environment
-python3 integration.py setup-demo
+The system is built around core EPOCH5 principles:
 
-# Run integrated workflow
-python3 integration.py run-workflow
+1. **Hash Chaining**: Every operation creates hash-chained entries in the ledger
+2. **Timestamping**: Consistent ISO timestamp format across all components
+3. **Provenance**: Complete audit trail from initial capsule through Unity Seal
+4. **Modularity**: Each component operates independently while maintaining integration
+5. **Integrity**: Cryptographic verification at every level
 
-# Check system status
-python3 integration.py status
+## Security Features
 
-# Validate system integrity
-python3 integration.py validate
-
-# Quick operations (one-liners)
-python3 integration.py oneliner system-snapshot
-python3 integration.py oneliner quick-agent --params '{"skills": ["devops", "monitoring"]}'
-```
-
-## One-Liner Examples
-
-The system is designed for both complex workflows and simple one-liner operations:
-
-```bash
-# Quick agent creation
-python3 agent_management.py --create security audit compliance
-
-# Instant policy check  
-python3 policy_grants.py evaluate "trust_policy" '{"agent_reliability": 0.95}'
-
-# Fast integrity verification
-python3 capsule_metadata.py verify important_data
-
-# System snapshot
-python3 integration.py oneliner system-snapshot
-
-# Complete workflow execution
-python3 integration.py run-workflow
-```
+- **SHA256 Hashing**: Cryptographic integrity for all data and metadata
+- **Merkle Tree Proofs**: Mathematical verification of data integrity
+- **Hash Chain Verification**: Tamper-evident provenance tracking
+- **Unity Seal**: Final cryptographic seal ensuring completeness
+- **Archive Integrity**: ZIP-level checksums and verification
 
 ## File Structure
 
 ```
 epoch5-template/
-├── epoch5.sh                 # Core EPOCH5 Bash script
-├── agent_management.py       # Agent DID and registry system
-├── policy_grants.py          # Policy enforcement and grants
-├── dag_management.py         # DAG creation and execution
-├── cycle_execution.py        # Cycle management with PBFT consensus
-├── capsule_metadata.py       # Data capsules with Merkle proofs
-├── meta_capsule.py          # System state meta-capsules
-├── integration.py           # Unified orchestration system
+├── epoch5.sh                 # Core EPOCH5 triple-pass system
+├── capsule_metadata.py       # Data capsules with Merkle tree proofs
+├── meta_capsule.py          # System state meta-capsules and archiving
 ├── README.md               # This documentation
 └── archive/               # Runtime data directory
     └── EPOCH5/           # System data storage
-        ├── agents/       # Agent registry and logs
-        ├── policies/     # Policy and grant definitions
-        ├── dags/         # DAG definitions and execution logs
-        ├── cycles/       # Cycle execution data
+        ├── manifests/    # Pass manifests (E5-P1, E5-P2, E5-P3)
         ├── capsules/     # Data capsules and content
         ├── metadata/     # Metadata entries and relationships
-        ├── archives/     # ZIP archives
-        ├── meta_capsules/# Meta-capsule storage
-        ├── manifests/    # EPOCH5 manifests
-        ├── ledger.log    # Main provenance ledger
-        └── heartbeat.log # System heartbeat log
+        ├── archives/     # ZIP archives with integrity proofs
+        ├── meta_capsules/# System state meta-capsules
+        ├── ledger.log    # Main provenance ledger with hash chains
+        ├── heartbeat.log # System heartbeat and timing log
+        └── unity_seal.txt# Final unity seal with completion status
 ```
-
-## Architecture Integration
-
-All components integrate through the EPOCH5 foundation:
-
-1. **Hash Chaining**: Every operation creates hash-chained entries in the ledger
-2. **Timestamping**: Consistent ISO timestamp format across all components
-3. **Provenance**: Complete audit trail from agents through meta-capsules
-4. **Modularity**: Each component can run independently or as part of workflows
-5. **Extensibility**: New components can easily integrate with existing patterns
-
-## Security Features
-
-- **Multi-signature approval** for critical operations
-- **Quorum requirements** for consensus decisions
-- **Rate limiting** to prevent abuse
-- **Skill-based access control** ensuring qualified agents
-- **Trust thresholds** based on reliability scoring
-- **Merkle tree proofs** for data integrity
-- **PBFT consensus** for distributed agreement
-- **Hash chain verification** for tamper detection
 
 ## Use Cases
 
-### DevOps Pipeline
+### Document Archiving with Provenance
 ```bash
-# Set up agents with different skills
-python3 agent_management.py --create ci_cd docker kubernetes
-python3 agent_management.py --create security audit compliance
-python3 agent_management.py --create monitoring logging alerting
+# Create timestamped document capsule
+echo "Important contract document" > contract.txt
+python3 capsule_metadata.py create-capsule "contract_v1" contract.txt --metadata '{"type": "legal", "classification": "confidential"}'
 
-# Create deployment policy
-python3 policy_grants.py create-policy "prod_deploy" "multi_sig" '{"required_signatures": 2, "authorized_signers": ["lead_dev", "devops_lead", "security_lead"]}'
+# Run EPOCH5 to create provenance chain
+./epoch5.sh
 
-# Execute deployment DAG with approval workflow
-python3 dag_management.py create "prod_deployment" deployment_tasks.json
-python3 dag_management.py execute "prod_deployment"
+# Create system snapshot
+python3 meta_capsule.py create "contract_archive_$(date +%Y%m%d)" --description "Contract archive with full provenance"
+
+# Verify everything
+python3 capsule_metadata.py verify "contract_v1"
+python3 meta_capsule.py verify "contract_archive_$(date +%Y%m%d)"
 ```
 
-### Data Processing Workflow  
+### Data Pipeline with Integrity Checking
 ```bash
-# Create data processing cycle
-python3 cycle_execution.py create "monthly_etl" 500.0 1800.0 etl_assignments.json
+# Create data processing pipeline
+echo "Raw data batch 1" > raw_data.csv
+python3 capsule_metadata.py create-capsule "raw_batch_1" raw_data.csv
 
-# Execute with validation
-python3 cycle_execution.py execute "monthly_etl" --validators node1 node2 node3
+# Process data (external processing step)
+echo "Processed data batch 1" > processed_data.json
+python3 capsule_metadata.py create-capsule "processed_batch_1" processed_data.json
 
-# Archive results with integrity proofs
-python3 capsule_metadata.py create-capsule "monthly_data" processed_data.json
-python3 capsule_metadata.py create-archive "monthly_archive" "monthly_data"
+# Link with metadata
+python3 capsule_metadata.py create-metadata "pipeline_batch_1" "raw_batch_1" "processed_batch_1" --metadata '{"pipeline": "data_processing_v2", "batch_id": "20240825_001"}'
+
+# Create final archive
+python3 capsule_metadata.py create-archive "pipeline_complete" "raw_batch_1" "processed_batch_1"
+
+# Generate system state with EPOCH5
+DELAY_HOURS_P1_P2=0 DELAY_HOURS_P2_P3=0 ./epoch5.sh
+python3 meta_capsule.py create "pipeline_$(date +%Y%m%d_%H%M%S)"
 ```
 
-### Compliance & Audit
+### Compliance and Audit Trail
 ```bash
-# Create comprehensive system snapshot
-python3 meta_capsule.py create "compliance_snapshot_q1" --description "Q1 compliance audit snapshot"
+# Create comprehensive audit snapshot
+python3 meta_capsule.py create "audit_$(date +%Y%m%d)" --description "Monthly compliance audit snapshot"
 
-# Validate all system components
-python3 integration.py validate
+# Verify all system components
+python3 meta_capsule.py state
+python3 capsule_metadata.py list-capsules
+python3 capsule_metadata.py list-archives
 
-# Generate audit trail
-python3 integration.py status > audit_report.json
+# Generate audit report
+echo "=== EPOCH5 Audit Report ===" > audit_report.txt
+echo "Generated: $(date)" >> audit_report.txt
+python3 meta_capsule.py list >> audit_report.txt
+python3 capsule_metadata.py list-capsules >> audit_report.txt
 ```
 
 ## Requirements
 
-- **Python 3.7+** for all Python components
 - **Bash 4.0+** for epoch5.sh
+- **Python 3.7+** for Python components
 - **openssl** or **shasum** for hashing (usually pre-installed)
-- **Optional**: NetworkX for advanced DAG validation (`pip install networkx`)
+- Standard library modules only (no external dependencies)
 
 ## Getting Started
 
@@ -345,24 +204,28 @@ python3 integration.py status > audit_report.json
    chmod +x epoch5.sh
    ```
 
-2. **Initialize with demo data**:
+2. **Run your first EPOCH5 capsule**:
    ```bash
-   python3 integration.py setup-demo
+   # Quick test with no delays
+   DELAY_HOURS_P1_P2=0 DELAY_HOURS_P2_P3=0 ./epoch5.sh
    ```
 
-3. **Run your first workflow**:
+3. **Create and verify a data capsule**:
    ```bash
-   python3 integration.py run-workflow
+   echo "Test data" > test.txt
+   python3 capsule_metadata.py create-capsule "test_1" test.txt
+   python3 capsule_metadata.py verify "test_1"
    ```
 
 4. **Create system snapshot**:
    ```bash
-   python3 integration.py oneliner system-snapshot
+   python3 meta_capsule.py create "first_snapshot" --description "Initial system state"
    ```
 
-5. **Validate everything**:
+5. **View system status**:
    ```bash
-   python3 integration.py validate
+   python3 meta_capsule.py state
+   python3 meta_capsule.py list
    ```
 
-The EPOCH5 Template provides a complete foundation for secure, auditable, and scalable task execution with comprehensive provenance tracking.
+The EPOCH5 Template provides a complete foundation for secure, auditable data processing with comprehensive provenance tracking and cryptographic integrity verification.
