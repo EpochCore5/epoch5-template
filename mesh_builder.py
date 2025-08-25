@@ -40,8 +40,8 @@ def create_mesh_structure():
     """Create the mesh structure with nodes and connections"""
     print(f"Building mesh with {COUNT} nodes using seed '{SEED}'")
     
-    # Set random seed for reproducible builds
-    random.seed(SEED)
+    # Use a local Random instance for reproducible builds
+    rng = random.Random(SEED)
     
     mesh_data = {
         'mesh_id': f"mesh_{HS(SEED + str(COUNT))[:12]}",
