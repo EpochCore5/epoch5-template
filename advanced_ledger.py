@@ -410,8 +410,15 @@ def main():
     if args.content:
         content = args.content
     elif args.content_file:
-        with open(args.content_file, 'r') as f:
-            content = f.read()
+        try:
+            with open(args.content_file, 'r') as f:
+                content = f.read()
+        except FileNotFoundError:
+            print(f"Error: Content file '{args.content_file}' not found", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error reading content file '{args.content_file}': {e}", file=sys.stderr)
+            sys.exit(1)
     else:
         print("Error: Either --content or --content-file must be provided", file=sys.stderr)
         sys.exit(1)
