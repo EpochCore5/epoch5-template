@@ -8,7 +8,7 @@ H = lambda b: hashlib.sha256(b).hexdigest()
 HS = lambda s: H(s.encode())
 
 # Execution logging and SLA calculation
-OUT = './ledger'
+OUT = os.getenv('OUTDIR', './ledger')
 os.makedirs(OUT, exist_ok=True)
 
 # Sample execution data - in real usage this would come from actual mesh execution

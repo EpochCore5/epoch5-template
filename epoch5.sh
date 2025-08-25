@@ -93,4 +93,4 @@ echo "Running Mesh Execution Logger..."
 python3 mesh_exec_logger.py
 
 echo "Python automation completed successfully!"
-echo "Check './ledger' directory for generated files."
+echo "Check '${OUTDIR:-./ledger}' directory for generated files."
