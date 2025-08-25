@@ -3,6 +3,12 @@
 Cycle Execution System - Implements cycles with budget control, latency tracking, and task assignments
 Includes SLA metrics and PBFT consensus for each cycle execution
 Integrates with EPOCH5 provenance tracking and DAG management
+
+Enhanced with:
+- Robust error handling and logging
+- Configuration management
+- Performance optimizations  
+- Comprehensive validation
 """
 
 import json
@@ -13,6 +19,13 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 import random
+
+# Import EPOCH5 utilities for enhanced functionality
+from epoch5_utils import (
+    EPOCH5Utils, EPOCH5Config, EPOCH5Logger, EPOCH5ErrorHandler,
+    EPOCH5Error, EPOCH5FileError, EPOCH5ValidationError,
+    get_logger, get_error_handler
+)
 
 class CycleStatus(Enum):
     PLANNED = "planned"
@@ -27,81 +40,211 @@ class PBFTPhase(Enum):
     COMMIT = "commit"
 
 class CycleExecutor:
-    def __init__(self, base_dir: str = "./archive/EPOCH5"):
-        self.base_dir = Path(base_dir)
-        self.cycles_dir = self.base_dir / "cycles"
-        self.cycles_dir.mkdir(parents=True, exist_ok=True)
-        self.cycles_file = self.cycles_dir / "cycles.json"
-        self.execution_log = self.cycles_dir / "cycle_execution.log"
-        self.sla_metrics_file = self.cycles_dir / "sla_metrics.json"
-        self.consensus_log = self.cycles_dir / "pbft_consensus.log"
+    """
+    Cycle Execution System with enhanced error handling and configuration
+    
+    Manages execution cycles with budget control, latency tracking, SLA monitoring,
+    and PBFT consensus. Enhanced with comprehensive logging, error handling,
+    and configuration management.
+    
+    Features:
+    - Robust error handling for all operations
+    - Configurable SLA requirements and thresholds  
+    - Structured logging with execution tracking
+    - Performance monitoring and optimization
+    - PBFT consensus with configurable parameters
+    """
+    
+    def __init__(self, base_dir: str = None, config_file: str = None):
+        """
+        Initialize Cycle Executor with enhanced configuration
+        
+        Args:
+            base_dir: Base directory for cycle data (overrides config)
+            config_file: Path to configuration file
+        """
+        # Initialize configuration and logging
+        self.config = EPOCH5Config(config_file)
+        self.logger = get_logger('CycleExecutor')
+        self.error_handler = get_error_handler(self.logger)
+        
+        # Set base directory from parameter or config
+        if base_dir:
+            self.base_dir = Path(base_dir)
+        else:
+            self.base_dir = Path(self.config.get('base_directory', './archive/EPOCH5'))
+        
+        # Create directory structure with error handling
+        try:
+            self.cycles_dir = EPOCH5Utils.create_directory_structure(
+                self.base_dir / "cycles"
+            )
+            
+            # Initialize file paths
+            self.cycles_file = self.cycles_dir / "cycles.json"
+            self.execution_log = self.cycles_dir / "cycle_execution.log"
+            self.sla_metrics_file = self.cycles_dir / "sla_metrics.json"
+            self.consensus_log = self.cycles_dir / "pbft_consensus.log"
+            
+            self.logger.info("CycleExecutor initialized successfully", {
+                'base_directory': str(self.base_dir),
+                'cycles_directory': str(self.cycles_dir)
+            })
+            
+        except Exception as e:
+            self.logger.error("Failed to initialize CycleExecutor", e)
+            raise EPOCH5Error(f"CycleExecutor initialization failed: {str(e)}") from e
         
     def timestamp(self) -> str:
         """Generate ISO timestamp consistent with EPOCH5"""
-        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return EPOCH5Utils.timestamp()
     
     def sha256(self, data: str) -> str:
         """Generate SHA256 hash consistent with EPOCH5"""
-        return hashlib.sha256(data.encode('utf-8')).hexdigest()
+        return EPOCH5Utils.sha256(data)
     
     def create_cycle(self, cycle_id: str, budget: float, max_latency: float,
-                    task_assignments: List[Dict[str, Any]], sla_requirements: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Create a new execution cycle"""
-        cycle = {
-            "cycle_id": cycle_id,
-            "budget": budget,
-            "spent_budget": 0.0,
-            "max_latency": max_latency,
-            "actual_latency": 0.0,
-            "task_assignments": task_assignments,
-            "sla_requirements": sla_requirements or {
-                "min_success_rate": 0.95,
-                "max_failure_rate": 0.05,
-                "max_retry_count": 3
-            },
-            "created_at": self.timestamp(),
-            "started_at": None,
-            "completed_at": None,
-            "status": CycleStatus.PLANNED.value,
-            "consensus_state": {
-                "phase": None,
-                "votes": {},
-                "committed": False,
-                "validator_nodes": []
-            },
-            "execution_metrics": {
-                "tasks_completed": 0,
-                "tasks_failed": 0,
-                "total_tasks": len(task_assignments),
-                "success_rate": 0.0,
-                "average_task_latency": 0.0
-            },
-            "resource_usage": {
-                "cpu_time": 0.0,
-                "memory_peak": 0.0,
-                "network_io": 0.0
-            },
-            "hash": self.sha256(f"{cycle_id}|{budget}|{max_latency}|{len(task_assignments)}")
-        }
-        return cycle
+                    task_assignments: List[Dict[str, Any]], 
+                    sla_requirements: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Create a new execution cycle with enhanced validation
+        
+        Args:
+            cycle_id: Unique identifier for the cycle
+            budget: Budget limit for the cycle
+            max_latency: Maximum allowed latency
+            task_assignments: List of task assignment dictionaries
+            sla_requirements: SLA requirements (uses defaults if not provided)
+            
+        Returns:
+            Dict containing cycle configuration and metadata
+            
+        Raises:
+            EPOCH5ValidationError: If input validation fails
+            EPOCH5Error: If cycle creation fails
+        """
+        try:
+            # Validate inputs
+            EPOCH5Utils.validate_required_fields(
+                {"cycle_id": cycle_id, "budget": budget, "max_latency": max_latency},
+                ["cycle_id", "budget", "max_latency"]
+            )
+            
+            if budget <= 0:
+                raise EPOCH5ValidationError("Budget must be positive")
+            if max_latency <= 0:
+                raise EPOCH5ValidationError("Max latency must be positive")
+            if not task_assignments:
+                raise EPOCH5ValidationError("Task assignments cannot be empty")
+            
+            # Get SLA requirements from config if not provided
+            if sla_requirements is None:
+                sla_requirements = {
+                    "min_success_rate": self.config.get('sla_defaults.min_success_rate', 0.95),
+                    "max_failure_rate": self.config.get('sla_defaults.max_failure_rate', 0.05),
+                    "max_retry_count": self.config.get('sla_defaults.max_retry_count', 3)
+                }
+            
+            cycle = {
+                "cycle_id": cycle_id,
+                "budget": budget,
+                "spent_budget": 0.0,
+                "max_latency": max_latency,
+                "actual_latency": 0.0,
+                "task_assignments": task_assignments,
+                "sla_requirements": sla_requirements,
+                "created_at": self.timestamp(),
+                "started_at": None,
+                "completed_at": None,
+                "status": CycleStatus.PLANNED.value,
+                "consensus_state": {
+                    "phase": None,
+                    "votes": {},
+                    "committed": False,
+                    "validator_nodes": []
+                },
+                "execution_metrics": {
+                    "tasks_completed": 0,
+                    "tasks_failed": 0,
+                    "total_tasks": len(task_assignments),
+                    "success_rate": 0.0,
+                    "average_task_latency": 0.0
+                },
+                "resource_usage": {
+                    "cpu_time": 0.0,
+                    "memory_peak": 0.0,
+                    "network_io": 0.0
+                },
+                "hash": self.sha256(f"{cycle_id}|{budget}|{max_latency}|{len(task_assignments)}")
+            }
+            
+            self.logger.info(f"Created cycle: {cycle_id}", {
+                'budget': budget,
+                'max_latency': max_latency,
+                'task_count': len(task_assignments),
+                'cycle_hash': cycle['hash']
+            })
+            
+            return cycle
+            
+        except EPOCH5ValidationError:
+            # Re-raise validation errors
+            raise
+        except Exception as e:
+            self.logger.error(f"Failed to create cycle: {cycle_id}", e)
+            raise EPOCH5Error(f"Cycle creation failed: {str(e)}") from e
     
     def save_cycle(self, cycle: Dict[str, Any]) -> bool:
-        """Save cycle to storage"""
-        cycles = self.load_cycles()
-        cycles["cycles"][cycle["cycle_id"]] = cycle
-        cycles["last_updated"] = self.timestamp()
+        """
+        Save cycle to storage with error handling
         
-        with open(self.cycles_file, 'w') as f:
-            json.dump(cycles, f, indent=2)
-        
-        return True
+        Args:
+            cycle: Cycle dictionary to save
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            cycles = self.load_cycles()
+            cycles["cycles"][cycle["cycle_id"]] = cycle
+            cycles["last_updated"] = self.timestamp()
+            
+            success = EPOCH5Utils.safe_json_save(cycles, self.cycles_file, backup=True)
+            
+            if success:
+                self.logger.debug(f"Saved cycle: {cycle['cycle_id']}")
+            else:
+                self.logger.error(f"Failed to save cycle: {cycle['cycle_id']}")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"Error saving cycle: {cycle.get('cycle_id', 'unknown')}", e)
+            return False
     
     def load_cycles(self) -> Dict[str, Any]:
-        """Load cycles from storage"""
-        if self.cycles_file.exists():
-            with open(self.cycles_file, 'r') as f:
-                return json.load(f)
-        return {"cycles": {}, "last_updated": self.timestamp()}
+        """
+        Load cycles from storage with error handling
+        
+        Returns:
+            Dict containing cycles data with default structure if file doesn't exist
+        """
+        default_data = {"cycles": {}, "last_updated": self.timestamp()}
+        
+        try:
+            cycles_data = EPOCH5Utils.safe_json_load(self.cycles_file, default_data)
+            
+            # Ensure required structure exists
+            if "cycles" not in cycles_data:
+                cycles_data["cycles"] = {}
+            if "last_updated" not in cycles_data:
+                cycles_data["last_updated"] = self.timestamp()
+            
+            return cycles_data
+            
+        except Exception as e:
+            self.logger.error("Error loading cycles", e)
+            return default_data
     
     def start_cycle(self, cycle_id: str, validator_nodes: List[str]) -> bool:
         """Start executing a cycle with PBFT consensus initialization"""
@@ -441,18 +584,43 @@ class CycleExecutor:
             f.write(f"{json.dumps(log_entry)}\n")
     
     def save_sla_metrics(self, sla_status: Dict[str, Any]):
-        """Save SLA metrics for reporting"""
-        if self.sla_metrics_file.exists():
-            with open(self.sla_metrics_file, 'r') as f:
-                metrics = json.load(f)
-        else:
-            metrics = {"sla_reports": [], "last_updated": self.timestamp()}
+        """
+        Save SLA metrics for reporting with error handling
         
-        metrics["sla_reports"].append(sla_status)
-        metrics["last_updated"] = self.timestamp()
-        
-        with open(self.sla_metrics_file, 'w') as f:
-            json.dump(metrics, f, indent=2)
+        Args:
+            sla_status: SLA status dictionary to save
+        """
+        try:
+            # Load existing metrics or create new structure
+            default_metrics = {"sla_reports": [], "last_updated": self.timestamp()}
+            metrics = EPOCH5Utils.safe_json_load(self.sla_metrics_file, default_metrics)
+            
+            # Ensure required structure
+            if "sla_reports" not in metrics:
+                metrics["sla_reports"] = []
+            
+            # Add new SLA report
+            metrics["sla_reports"].append(sla_status)
+            metrics["last_updated"] = self.timestamp()
+            
+            # Save with error handling
+            success = EPOCH5Utils.safe_json_save(metrics, self.sla_metrics_file, backup=True)
+            
+            if success:
+                self.logger.debug("SLA metrics saved successfully", {
+                    'cycle_id': sla_status.get('cycle_id'),
+                    'compliant': sla_status.get('compliant'),
+                    'violations_count': len(sla_status.get('violations', []))
+                })
+            else:
+                self.logger.error("Failed to save SLA metrics", None, {
+                    'cycle_id': sla_status.get('cycle_id')
+                })
+            
+        except Exception as e:
+            self.logger.error("Error saving SLA metrics", e, {
+                'cycle_id': sla_status.get('cycle_id', 'unknown')
+            })
 
 # CLI interface for cycle execution
 def main():

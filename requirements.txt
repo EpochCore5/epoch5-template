@@ -1,0 +1,17 @@
+# EPOCH5 Template Requirements
+# Core dependencies for the enhanced EPOCH5 system
+
+# Optional dependencies for enhanced features
+networkx>=2.5          # For advanced DAG validation (optional)
+cryptography>=3.0      # For enhanced security features (future)
+aiofiles>=0.8.0        # For async file operations (future)
+psutil>=5.8.0          # For system monitoring (future)
+
+# Development and testing dependencies
+pytest>=6.0.0          # For advanced testing (optional)
+pytest-cov>=2.10.0     # For test coverage (optional)
+black>=21.0.0          # For code formatting (optional)
+flake8>=3.8.0          # For code linting (optional)
+
+# Note: The system is designed to work with Python 3.7+ standard library
+# All optional dependencies have fallback implementations

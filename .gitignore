@@ -42,3 +42,9 @@ Thumbs.db
 
 # Archive directories (created at runtime)
 archive/
+
+# EPOCH5 specific
+*.log
+*.backup
+*.tmp
+sample_assignments.json
