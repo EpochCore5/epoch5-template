@@ -22,6 +22,46 @@ EpochCore is a business founded and operated by John Ryan, a single father in Ch
 
 ---
 
+## Monetization & Services
+
+### 💰 Support & Payment Options
+
+**Coinbase Wallet**: For cryptocurrency donations and payments
+- Contact jryan2k19@gmail.com for wallet address and payment instructions
+
+**Direct Contact**: jryan2k19@gmail.com
+- Project sponsorship inquiries
+- Commercial licensing discussions
+- Technical support requests
+
+**GitHub Sponsors**: [Support EpochCore5 on GitHub](https://github.com/sponsors/EpochCore5)
+- Monthly recurring support
+- One-time contributions
+- Sponsor benefits and recognition
+
+### 🔧 Consulting Services
+
+**Available Consulting Areas**:
+- Custom EPOCH5 system implementations
+- Agent management and policy development
+- Secure logging and provenance system design
+- DAG execution and cycle optimization
+- Enterprise integration and scaling
+- Training and technical workshops
+
+**Consulting Rates**:
+- Standard consultation: Contact for current rates
+- Enterprise packages: Custom pricing available
+- Training workshops: Group and individual options
+
+**To engage consulting services**:
+1. Email jryan2k19@gmail.com with project details
+2. Schedule initial consultation call
+3. Receive custom proposal and timeline
+4. All transactions logged in [automation-log.md](automation-log.md)
+
+---
+
 ## Overview
 
 The EPOCH5 Template provides a complete ecosystem for:
