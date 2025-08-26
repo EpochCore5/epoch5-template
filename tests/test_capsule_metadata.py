@@ -63,8 +63,8 @@ class TestCapsuleManager:
         # Store using the content directly with the capsule
         capsule_manager.update_capsule_index(capsule)
 
-        # Verify capsule is indexed
-        index = capsule_manager.load_index()
+        # Verify capsule is indexed using the correct index file path
+        index = capsule_manager.load_index(capsule_manager.capsules_index)
         assert capsule_id in index["capsules"]
 
     def test_get_capsule(self, capsule_manager):
@@ -139,10 +139,11 @@ class TestCapsuleManager:
         )
 
         assert isinstance(archive_result, dict)
-        assert "success" in archive_result
+        assert "status" in archive_result
+        assert archive_result["status"] == "completed"
 
-        if archive_result["success"]:
-            assert "archive_path" in archive_result
+        if archive_result["status"] == "completed":
+            assert "archive_file" in archive_result
 
     def test_nonexistent_capsule(self, capsule_manager):
         """Test operations on nonexistent capsules"""
@@ -152,4 +153,5 @@ class TestCapsuleManager:
         assert capsule is None
 
         verification = capsule_manager.verify_capsule_integrity(fake_capsule_id)
-        assert verification["overall_valid"] is False
+        assert "error" in verification
+        assert verification["error"] == "Capsule not found"
