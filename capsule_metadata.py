@@ -4,6 +4,26 @@ Capsule and Metadata Management System
 Stores capsules, metadata, and Merkle tree proofs for data integrity
 Archives data into ZIP files for secure storage and transport
 Integrates with EPOCH5 provenance tracking system
+
+This module provides comprehensive data integrity and archiving capabilities:
+- Merkle tree-based integrity verification
+- Content-addressed storage with cryptographic proofs
+- Metadata relationship tracking and linking
+- ZIP archive creation with integrity checksums
+- Batch processing for large-scale operations
+- Performance-optimized operations for enterprise use
+
+Examples:
+    Basic capsule creation:
+        manager = CapsuleManager()
+        capsule = manager.create_capsule("data_v1", "content", {"version": "1.0"})
+        
+    Integrity verification:
+        result = manager.verify_capsule_integrity("data_v1")
+        print(f"Valid: {result['overall_valid']}")
+        
+    Archive creation:
+        archive = manager.create_archive("backup_2024", ["capsule1", "capsule2"])
 """
 
 import json
@@ -16,111 +36,287 @@ from typing import Dict, List, Optional, Any, Tuple
 import base64
 import struct
 
+# Import EPOCH5 utilities for enhanced functionality
+from epoch5_utils import (
+    get_logger, timestamp, sha256, ensure_directory, safe_load_json, safe_save_json,
+    EPOCH5Config, EPOCH5ErrorHandler, EPOCH5Utils, EPOCH5Metrics
+)
+
 class MerkleTree:
-    """Simple Merkle tree implementation for data integrity proofs"""
+    """
+    Enhanced Merkle tree implementation for data integrity proofs
+    
+    This class provides cryptographically secure verification of data integrity
+    using a binary tree structure where each non-leaf node is the hash of its
+    child nodes. Supports proof generation and verification for individual blocks.
+    
+    Features:
+    - Binary tree construction with SHA-256 hashing
+    - Proof generation for any data block
+    - Proof verification for integrity checking
+    - Handles odd numbers of blocks gracefully
+    - Performance optimized for large datasets
+    
+    Attributes:
+        data_blocks (List[str]): Original data blocks
+        tree_levels (List[List[str]]): All levels of the tree structure
+        root_hash (str): Root hash of the complete tree
+    """
     
     def __init__(self, data_blocks: List[str]):
-        self.data_blocks = data_blocks
+        """
+        Initialize Merkle tree with data blocks
+        
+        Args:
+            data_blocks (List[str]): Data blocks to build tree from
+            
+        Raises:
+            ValueError: If data_blocks is empty or None
+        """
+        if not data_blocks:
+            raise ValueError("Data blocks cannot be empty for Merkle tree construction")
+            
+        self.data_blocks = data_blocks[:]  # Create copy to avoid mutation
         self.tree_levels = []
-        self.root_hash = self.build_tree()
+        self.logger = get_logger('MerkleTree')
+        
+        try:
+            self.root_hash = self.build_tree()
+            self.logger.debug(f"Built Merkle tree with {len(data_blocks)} blocks, root: {self.root_hash[:16]}...")
+        except Exception as e:
+            self.logger.error(f"Failed to build Merkle tree: {str(e)}")
+            raise
     
     def sha256(self, data: str) -> str:
-        """SHA256 hash function"""
-        return hashlib.sha256(data.encode('utf-8')).hexdigest()
+        """SHA256 hash function using EPOCH5 utilities"""
+        return sha256(data)
     
     def build_tree(self) -> str:
-        """Build the Merkle tree and return root hash"""
+        """
+        Build the Merkle tree and return root hash with enhanced error handling
+        
+        Returns:
+            str: Root hash of the tree
+            
+        Raises:
+            ValueError: If tree construction fails due to invalid data
+        """
         if not self.data_blocks:
             return self.sha256("")
         
-        # Start with leaf hashes
-        current_level = [self.sha256(block) for block in self.data_blocks]
-        self.tree_levels.append(current_level[:])
-        
-        # Build tree levels
-        while len(current_level) > 1:
-            next_level = []
+        try:
+            # Start with leaf hashes (validate each block)
+            current_level = []
+            for i, block in enumerate(self.data_blocks):
+                if not isinstance(block, str):
+                    raise ValueError(f"Block {i} is not a string: {type(block)}")
+                current_level.append(self.sha256(block))
             
-            # Process pairs of hashes
-            for i in range(0, len(current_level), 2):
-                left = current_level[i]
-                right = current_level[i + 1] if i + 1 < len(current_level) else left
-                combined_hash = self.sha256(left + right)
-                next_level.append(combined_hash)
+            self.tree_levels.append(current_level[:])
             
-            self.tree_levels.append(next_level[:])
-            current_level = next_level
-        
-        return current_level[0] if current_level else self.sha256("")
+            # Build tree levels bottom-up
+            while len(current_level) > 1:
+                next_level = []
+                
+                # Process pairs of hashes
+                for i in range(0, len(current_level), 2):
+                    left = current_level[i]
+                    # Handle odd number of elements by duplicating the last one
+                    right = current_level[i + 1] if i + 1 < len(current_level) else left
+                    combined_hash = self.sha256(left + right)
+                    next_level.append(combined_hash)
+                
+                self.tree_levels.append(next_level[:])
+                current_level = next_level
+            
+            return current_level[0]
+            
+        except Exception as e:
+            self.logger.error(f"Tree construction failed: {str(e)}")
+            raise ValueError(f"Merkle tree construction failed: {str(e)}")
     
     def get_proof(self, block_index: int) -> List[Dict[str, Any]]:
-        """Get Merkle proof for a specific data block"""
+        """
+        Get Merkle proof for a specific data block with validation
+        
+        Args:
+            block_index (int): Index of the block to generate proof for
+            
+        Returns:
+            List[Dict[str, Any]]: Proof path with sibling hashes and positions
+            
+        Raises:
+            ValueError: If block_index is invalid
+        """
+        if not isinstance(block_index, int) or block_index < 0:
+            raise ValueError(f"Invalid block index: {block_index}")
+            
         if block_index >= len(self.data_blocks):
-            return []
+            raise ValueError(f"Block index {block_index} out of range (0-{len(self.data_blocks)-1})")
         
-        proof = []
-        current_index = block_index
-        
-        for level in self.tree_levels[:-1]:  # Exclude root level
-            # Find sibling
-            if current_index % 2 == 0:  # Left child
-                sibling_index = current_index + 1
-                position = "right"
-            else:  # Right child
-                sibling_index = current_index - 1
-                position = "left"
+        try:
+            proof = []
+            current_index = block_index
             
-            if sibling_index < len(level):
-                sibling_hash = level[sibling_index]
-            else:
-                sibling_hash = level[current_index]  # Self if no sibling
+            # Build proof by collecting sibling hashes at each level
+            for level_idx, level in enumerate(self.tree_levels[:-1]):  # Exclude root level
+                # Find sibling
+                if current_index % 2 == 0:  # Left child
+                    sibling_index = current_index + 1
+                    position = "right"
+                else:  # Right child
+                    sibling_index = current_index - 1
+                    position = "left"
+                
+                # Get sibling hash (or duplicate if no sibling exists)
+                if sibling_index < len(level):
+                    sibling_hash = level[sibling_index]
+                else:
+                    sibling_hash = level[current_index]  # Self if no sibling
+                
+                proof.append({
+                    "hash": sibling_hash,
+                    "position": position,
+                    "level": level_idx
+                })
+                
+                current_index = current_index // 2
             
-            proof.append({
-                "hash": sibling_hash,
-                "position": position
-            })
+            self.logger.debug(f"Generated proof for block {block_index} with {len(proof)} steps")
+            return proof
             
-            current_index = current_index // 2
+        except Exception as e:
+            self.logger.error(f"Proof generation failed for block {block_index}: {str(e)}")
+            raise
         
         return proof
     
     def verify_proof(self, block_data: str, block_index: int, proof: List[Dict[str, Any]]) -> bool:
-        """Verify a Merkle proof"""
-        current_hash = self.sha256(block_data)
+        """
+        Verify a Merkle proof for a specific block with enhanced validation
         
-        for proof_element in proof:
-            sibling_hash = proof_element["hash"]
-            position = proof_element["position"]
+        Args:
+            block_data (str): Original block data to verify
+            block_index (int): Index of the block in the original dataset
+            proof (List[Dict[str, Any]]): Proof path from get_proof()
             
-            if position == "left":
-                current_hash = self.sha256(sibling_hash + current_hash)
-            else:
-                current_hash = self.sha256(current_hash + sibling_hash)
+        Returns:
+            bool: True if proof is valid, False otherwise
+            
+        Raises:
+            ValueError: If inputs are invalid
+        """
+        if not isinstance(block_data, str):
+            raise ValueError("Block data must be a string")
         
-        return current_hash == self.root_hash
+        if not isinstance(block_index, int) or block_index < 0:
+            raise ValueError(f"Invalid block index: {block_index}")
+            
+        if block_index >= len(self.data_blocks):
+            raise ValueError(f"Block index {block_index} out of range")
+        
+        # Verify the block data matches original
+        if block_data != self.data_blocks[block_index]:
+            self.logger.warning(f"Block data mismatch for index {block_index}")
+            return False
+        
+        try:
+            current_hash = self.sha256(block_data)
+            
+            # Follow proof path to root
+            for i, proof_element in enumerate(proof):
+                if "hash" not in proof_element or "position" not in proof_element:
+                    self.logger.error(f"Invalid proof element at step {i}: missing hash or position")
+                    return False
+                
+                sibling_hash = proof_element["hash"]
+                position = proof_element["position"]
+                
+                if position == "left":
+                    current_hash = self.sha256(sibling_hash + current_hash)
+                elif position == "right":
+                    current_hash = self.sha256(current_hash + sibling_hash)
+                else:
+                    self.logger.error(f"Invalid position in proof: {position}")
+                    return False
+            
+            is_valid = current_hash == self.root_hash
+            
+            if is_valid:
+                self.logger.debug(f"Proof verified successfully for block {block_index}")
+            else:
+                self.logger.warning(f"Proof verification failed for block {block_index}")
+                
+            return is_valid
+            
+        except Exception as e:
+            self.logger.error(f"Proof verification error: {str(e)}")
+            return False
+
 
 class CapsuleManager:
-    def __init__(self, base_dir: str = "./archive/EPOCH5"):
-        self.base_dir = Path(base_dir)
-        self.capsules_dir = self.base_dir / "capsules"
-        self.metadata_dir = self.base_dir / "metadata"
-        self.archives_dir = self.base_dir / "archives"
+    """
+    Enhanced capsule and metadata management with comprehensive error handling
+    
+    This class provides enterprise-grade data capsule management including:
+    - Content-addressed storage with cryptographic integrity
+    - Merkle tree-based verification for data blocks
+    - Metadata relationship tracking and linking
+    - Archive creation with compression and checksums
+    - Performance optimization for large-scale operations
+    - Comprehensive audit logging and error handling
+    
+    Attributes:
+        base_dir (Path): Base directory for all capsule storage
+        config (EPOCH5Config): Configuration manager instance
+        logger (Logger): Logger instance for this component
+        metrics (EPOCH5Metrics): Performance metrics collector
+    """
+    
+    def __init__(self, base_dir: str = "./archive/EPOCH5", config: Optional[EPOCH5Config] = None):
+        """
+        Initialize capsule manager with enhanced configuration
         
-        # Create directories
-        for directory in [self.capsules_dir, self.metadata_dir, self.archives_dir]:
-            directory.mkdir(parents=True, exist_ok=True)
+        Args:
+            base_dir (str): Base directory for EPOCH5 data storage
+            config (EPOCH5Config, optional): Configuration instance
+            
+        Raises:
+            RuntimeError: If directory creation fails
+        """
+        self.base_dir = ensure_directory(base_dir)
+        self.config = config or EPOCH5Config()
+        self.metrics = EPOCH5Metrics()
         
+        # Setup logging
+        log_level = self.config.get('capsule_metadata', 'log_level', 'INFO')
+        log_file = self.base_dir / "capsules" / "capsule_manager.log"
+        self.logger = get_logger('CapsuleManager', str(log_file), log_level)
+        
+        try:
+            # Create directories with error handling
+            self.capsules_dir = ensure_directory(self.base_dir / "capsules")
+            self.metadata_dir = ensure_directory(self.base_dir / "metadata")
+            self.archives_dir = ensure_directory(self.base_dir / "archives")
+            
+            self.logger.info(f"CapsuleManager initialized with base_dir: {base_dir}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize CapsuleManager: {str(e)}")
+            raise RuntimeError(f"CapsuleManager initialization failed: {str(e)}")
+        
+        # Index files
         self.capsules_index = self.capsules_dir / "index.json"
         self.metadata_index = self.metadata_dir / "index.json"
         self.integrity_log = self.base_dir / "integrity.log"
     
     def timestamp(self) -> str:
         """Generate ISO timestamp consistent with EPOCH5"""
-        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return timestamp()
     
     def sha256(self, data: str) -> str:
         """Generate SHA256 hash consistent with EPOCH5"""
-        return hashlib.sha256(data.encode('utf-8')).hexdigest()
+        return sha256(data)
     
     def create_capsule(self, capsule_id: str, content: str, metadata: Dict[str, Any] = None,
                       content_type: str = "text/plain") -> Dict[str, Any]:
@@ -468,39 +664,158 @@ class CapsuleManager:
 
 # CLI interface for capsule management
 def main():
-    import argparse
+    """Enhanced CLI interface with configuration support and comprehensive options"""
+    import sys
+    import json
     
-    parser = argparse.ArgumentParser(description="EPOCH5 Capsule and Metadata Management")
+    parser = EPOCH5Utils.create_cli_parser("EPOCH5 Capsule and Metadata Management System")
+    
+    # Capsule operations
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Create capsule
     create_parser = subparsers.add_parser("create-capsule", help="Create a new capsule")
     create_parser.add_argument("capsule_id", help="Capsule identifier")
     create_parser.add_argument("content_file", help="File containing content")
-    create_parser.add_argument("--metadata", help="JSON metadata")
+    create_parser.add_argument("--metadata", help="JSON metadata string")
+    create_parser.add_argument("--content-type", default="text/plain", help="Content MIME type")
     
     # Verify capsule
     verify_parser = subparsers.add_parser("verify", help="Verify capsule integrity")
     verify_parser.add_argument("capsule_id", help="Capsule identifier")
+    verify_parser.add_argument("--detailed", action="store_true", help="Show detailed verification results")
     
     # Create metadata
     metadata_parser = subparsers.add_parser("create-metadata", help="Create metadata entry")
     metadata_parser.add_argument("entry_id", help="Metadata entry identifier")
     metadata_parser.add_argument("capsule_ids", nargs="+", help="Referenced capsule IDs")
-    metadata_parser.add_argument("--metadata", help="JSON metadata")
+    metadata_parser.add_argument("--metadata", help="JSON metadata string")
     
     # Create archive
     archive_parser = subparsers.add_parser("create-archive", help="Create ZIP archive")
     archive_parser.add_argument("archive_id", help="Archive identifier")
     archive_parser.add_argument("capsule_ids", nargs="+", help="Capsule IDs to include")
+    archive_parser.add_argument("--include-metadata", action="store_true", default=True, help="Include metadata (default)")
     archive_parser.add_argument("--no-metadata", action="store_true", help="Exclude metadata")
     
     # List commands
-    subparsers.add_parser("list-capsules", help="List all capsules")
-    subparsers.add_parser("list-archives", help="List all archives")
+    list_capsules_parser = subparsers.add_parser("list-capsules", help="List all capsules")
+    list_capsules_parser.add_argument("--verbose", action="store_true", help="Show detailed information")
+    
+    list_archives_parser = subparsers.add_parser("list-archives", help="List all archives")
+    list_archives_parser.add_argument("--verbose", action="store_true", help="Show detailed information")
+    
+    # Batch operations
+    batch_parser = subparsers.add_parser("batch", help="Batch operations")
+    batch_parser.add_argument("--verify-all", action="store_true", help="Verify all capsules")
+    batch_parser.add_argument("--export-index", help="Export capsule index to file")
     
     args = parser.parse_args()
-    manager = CapsuleManager()
+    
+    # Initialize configuration and manager
+    config = EPOCH5Config(args.config) if args.config else None
+    manager = CapsuleManager(args.base_dir, config)
+    
+    try:
+        if args.command == "create-capsule":
+            # Read content from file
+            with open(args.content_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse metadata if provided
+            metadata = {}
+            if args.metadata:
+                metadata = json.loads(args.metadata)
+            
+            capsule = manager.create_capsule(
+                args.capsule_id, 
+                content, 
+                metadata, 
+                args.content_type
+            )
+            
+            print(f"✓ Created capsule: {capsule['capsule_id']}")
+            print(f"  Content hash: {capsule['content_hash'][:16]}...")
+            print(f"  Merkle root: {capsule['merkle_root'][:16]}...")
+            print(f"  Blocks: {capsule['content_blocks_count']}")
+            print(f"  Size: {capsule['content_size']} bytes")
+            
+        elif args.command == "verify":
+            result = manager.verify_capsule_integrity(args.capsule_id)
+            
+            if result['overall_valid']:
+                print(f"✓ Capsule {args.capsule_id} is VALID")
+            else:
+                print(f"✗ Capsule {args.capsule_id} is INVALID")
+            
+            if args.detailed:
+                print("\nDetailed Results:")
+                print(f"  Content hash valid: {result.get('content_hash_valid', 'N/A')}")
+                merkle_info = result.get('merkle_verification', {})
+                print(f"  Merkle root valid: {merkle_info.get('root_valid', 'N/A')}")
+                print(f"  Blocks verified: {merkle_info.get('blocks_verified', 0)}")
+                print(f"  Blocks failed: {merkle_info.get('blocks_failed', 0)}")
+            
+        elif args.command == "list-capsules":
+            capsules = manager.list_capsules()
+            print(f"Capsules ({len(capsules)}):")
+            
+            if not capsules:
+                print("  No capsules found")
+            else:
+                for capsule in capsules:
+                    status_indicator = "🟢" if capsule.get('status') == 'active' else "🔴"
+                    print(f"  {status_indicator} {capsule['capsule_id']}")
+                    if args.verbose:
+                        print(f"    Created: {capsule.get('created_at', 'N/A')}")
+                        print(f"    Size: {capsule.get('content_size', 0)} bytes")
+                        print(f"    Type: {capsule.get('content_type', 'unknown')}")
+                        print(f"    Blocks: {capsule.get('content_blocks_count', 0)}")
+                        print()
+        
+        elif args.command == "batch":
+            if args.verify_all:
+                capsules = manager.list_capsules()
+                verified_count = 0
+                failed_count = 0
+                
+                print(f"Verifying {len(capsules)} capsules...")
+                for capsule in capsules:
+                    try:
+                        result = manager.verify_capsule_integrity(capsule['capsule_id'])
+                        if result['overall_valid']:
+                            verified_count += 1
+                            print(f"  ✓ {capsule['capsule_id']}")
+                        else:
+                            failed_count += 1
+                            print(f"  ✗ {capsule['capsule_id']}")
+                    except Exception as e:
+                        failed_count += 1
+                        print(f"  ✗ {capsule['capsule_id']} (error: {str(e)})")
+                
+                print(f"\nVerification complete: {verified_count} valid, {failed_count} failed")
+            
+            elif args.export_index:
+                capsules = manager.list_capsules()
+                with open(args.export_index, 'w') as f:
+                    json.dump(capsules, f, indent=2)
+                print(f"✓ Exported {len(capsules)} capsules to {args.export_index}")
+        
+        else:
+            parser.print_help()
+            return 1
+    
+    except FileNotFoundError as e:
+        print(f"✗ File not found: {str(e)}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as e:
+        print(f"✗ Invalid JSON: {str(e)}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        return 1
+    
+    return 0
     
     if args.command == "create-capsule":
         with open(args.content_file, 'r', encoding='utf-8') as f:
@@ -551,4 +866,5 @@ def main():
         parser.print_help()
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
