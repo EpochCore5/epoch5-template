@@ -37,7 +37,7 @@ def benchmark_integration_setup():
     with tempfile.TemporaryDirectory() as temp_dir:
         os.chdir(temp_dir)
         # Copy necessary files
-        original_dir = "/home/runner/work/epoch5-template/epoch5-template"
+        original_dir = os.getcwd()
         for file in ["integration.py", "agent_management.py", "policy_grants.py", 
                     "dag_management.py", "cycle_execution.py", "capsule_metadata.py", "meta_capsule.py"]:
             shutil.copy2(os.path.join(original_dir, file), temp_dir)
