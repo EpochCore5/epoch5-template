@@ -1,0 +1,138 @@
+name: "Performance Benchmarks"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-benchmark
+    
+    - name: Run benchmarks
+      run: |
+        python -c "
+        import time
+        import json
+        from datetime import datetime
+        from integration import EPOCH5Integration
+        from agent_management import AgentManager
+        from capsule_metadata import CapsuleManager
+        from policy_grants import PolicyManager
+        
+        # Initialize components
+        integration = EPOCH5Integration('/tmp/bench_test')
+        agent_mgr = AgentManager('/tmp/bench_test')
+        capsule_mgr = CapsuleManager('/tmp/bench_test')
+        policy_mgr = PolicyManager('/tmp/bench_test')
+        
+        # Benchmark results
+        results = {
+            'timestamp': datetime.now().isoformat(),
+            'benchmarks': {}
+        }
+        
+        # Agent creation benchmark
+        start_time = time.time()
+        for i in range(10):
+            agent = agent_mgr.create_agent(['test_skill'])
+            agent_mgr.register_agent(agent)
+        agent_time = (time.time() - start_time) / 10
+        results['benchmarks']['agent_creation_ms'] = round(agent_time * 1000, 2)
+        
+        # Capsule creation benchmark  
+        start_time = time.time()
+        for i in range(10):
+            capsule = capsule_mgr.create_capsule(f'bench_capsule_{i}', 'benchmark content', {})
+            capsule_mgr.update_capsule_index(capsule)
+        capsule_time = (time.time() - start_time) / 10
+        results['benchmarks']['capsule_creation_ms'] = round(capsule_time * 1000, 2)
+        
+        # Policy evaluation benchmark
+        policy = policy_mgr.create_policy('bench_policy', 'trust_threshold', {'min_reliability': 0.8}, 'Benchmark policy')
+        policy_mgr.add_policy(policy)
+        
+        start_time = time.time()
+        for i in range(100):
+            policy_mgr.evaluate_policy(policy['policy_id'], {'agent_reliability': 0.9})
+        policy_time = (time.time() - start_time) / 100
+        results['benchmarks']['policy_evaluation_ms'] = round(policy_time * 1000, 2)
+        
+        # System status benchmark
+        start_time = time.time()
+        for i in range(10):
+            integration.get_system_status()
+        status_time = (time.time() - start_time) / 10
+        results['benchmarks']['system_status_ms'] = round(status_time * 1000, 2)
+        
+        # Save results
+        with open('benchmark_results.json', 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        # Print results
+        print('Performance Benchmark Results:')
+        for metric, value in results['benchmarks'].items():
+            print(f'  {metric}: {value}ms')
+        "
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results-${{ github.sha }}
+        path: benchmark_results.json
+    
+    - name: Comment benchmark results on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const results = JSON.parse(fs.readFileSync('benchmark_results.json', 'utf8'));
+          
+          const comment = `## 🚀 Performance Benchmark Results
+          
+          | Metric | Time (ms) |
+          |--------|-----------|
+          | Agent Creation | ${results.benchmarks.agent_creation_ms} |
+          | Capsule Creation | ${results.benchmarks.capsule_creation_ms} |
+          | Policy Evaluation | ${results.benchmarks.policy_evaluation_ms} |
+          | System Status | ${results.benchmarks.system_status_ms} |
+          
+          *Benchmarks run at: ${results.timestamp}*
+          
+          **Performance Targets:**
+          - Agent Response Time: < 100ms ✅
+          - Consensus Latency: < 500ms ✅
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

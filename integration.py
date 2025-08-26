@@ -7,10 +7,9 @@ Provides unified interface for managing agents, policies, DAGs, cycles, capsules
 
 import json
 import argparse
-import sys
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 
 # Import all EPOCH5 components
 from agent_management import AgentManager
@@ -22,7 +21,7 @@ from meta_capsule import MetaCapsuleCreator
 
 # Import ceiling manager for enhanced ceiling features
 try:
-    from ceiling_manager import CeilingManager, ServiceTier, CeilingType
+    from ceiling_manager import CeilingManager, ServiceTier
 
     CEILING_MANAGER_AVAILABLE = True
 except ImportError:
@@ -428,7 +427,6 @@ class EPOCH5Integration:
         try:
             # Validate all capsules
             capsules = self.capsule_manager.list_capsules()
-            capsule_validations = []
 
             for capsule_info in capsules:
                 # This is a simplified approach - in real implementation we'd need capsule IDs
