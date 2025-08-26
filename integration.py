@@ -9,7 +9,7 @@ import json
 import argparse
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 # Import all EPOCH5 components
@@ -24,23 +24,28 @@ class EPOCH5Integration:
     """Main integration class for EPOCH5 system"""
     
     def __init__(self, base_dir: str = "./archive/EPOCH5"):
-        self.base_dir = Path(base_dir)
-        self.base_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize all managers
-        self.agent_manager = AgentManager(str(base_dir))
-        self.policy_manager = PolicyManager(str(base_dir))
-        self.dag_manager = DAGManager(str(base_dir))
-        self.cycle_executor = CycleExecutor(str(base_dir))
-        self.capsule_manager = CapsuleManager(str(base_dir))
-        self.meta_capsule_creator = MetaCapsuleCreator(str(base_dir))
-        
-        # Integration log
-        self.integration_log = self.base_dir / "integration.log"
+        try:
+            self.base_dir = Path(base_dir)
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Initialize all managers
+            self.agent_manager = AgentManager(str(base_dir))
+            self.policy_manager = PolicyManager(str(base_dir))
+            self.dag_manager = DAGManager(str(base_dir))
+            self.cycle_executor = CycleExecutor(str(base_dir))
+            self.capsule_manager = CapsuleManager(str(base_dir))
+            self.meta_capsule_creator = MetaCapsuleCreator(str(base_dir))
+            
+            # Integration log
+            self.integration_log = self.base_dir / "integration.log"
+        except PermissionError:
+            raise PermissionError(f"Cannot create or access directory: {base_dir}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize EPOCH5Integration: {e}")
     
     def timestamp(self) -> str:
         """Generate ISO timestamp"""
-        return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     
     def log_integration_event(self, event: str, data: Dict[str, Any]):
         """Log integration events"""
@@ -485,9 +490,26 @@ def main():
                 print(f"  {did}: {agent.get('skills', [])} (reliability: {agent.get('reliability_score', 0):.2f})")
         
         elif args.agent_command == "create":
-            agent = integration.agent_manager.create_agent(args.skills)
-            integration.agent_manager.register_agent(agent)
-            print(f"Created agent: {agent['did']} with skills: {', '.join(agent['skills'])}")
+            # Validate skills input
+            if not args.skills or len(args.skills) == 0:
+                print("❌ Error: At least one skill is required to create an agent")
+                print("💡 Usage: python3 integration.py agents create skill1 skill2 ...")
+                sys.exit(1)
+            
+            # Validate skill format (basic validation)
+            invalid_skills = [skill for skill in args.skills if not skill.strip() or len(skill.strip()) < 2]
+            if invalid_skills:
+                print(f"❌ Error: Invalid skill names: {invalid_skills}")
+                print("💡 Skills must be at least 2 characters long and not empty")
+                sys.exit(1)
+            
+            try:
+                agent = integration.agent_manager.create_agent(args.skills)
+                integration.agent_manager.register_agent(agent)
+                print(f"✓ Created agent: {agent['did']} with skills: {', '.join(agent['skills'])}")
+            except Exception as e:
+                print(f"❌ Failed to create agent: {e}")
+                sys.exit(1)
     
     elif args.command == "policies":
         if args.policy_command == "list":
@@ -523,4 +545,20 @@ def main():
         parser.print_help()
 
 if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⚠️  Operation interrupted by user")
+        sys.exit(1)
+    except FileNotFoundError as e:
+        print(f"❌ File not found: {e}")
+        sys.exit(1)
+    except PermissionError as e:
+        print(f"❌ Permission denied: {e}")
+        print("💡 Try checking file permissions or running with appropriate privileges")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        print("💡 Use --help for usage information or check the logs for more details")
+        sys.exit(1)
     main()
