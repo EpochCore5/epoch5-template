@@ -6,9 +6,7 @@ Integrates with EPOCH5 logging, hashing, and provenance tracking
 
 import json
 import uuid
-import time
 import hashlib
-import random
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
@@ -184,9 +182,8 @@ def main():
         registry = manager.load_registry()
         print(f"Agent Registry ({len(registry['agents'])} agents):")
         for did, agent in registry["agents"].items():
-            print(
-                f"  {did}: {agent['skills']} (reliability: {agent['reliability_score']:.2f})"
-            )
+            reliability = agent["reliability_score"]
+            print(f"  {did}: {agent['skills']} (reliability: {reliability:.2f})")
 
     elif args.heartbeat:
         manager.log_heartbeat(args.heartbeat)

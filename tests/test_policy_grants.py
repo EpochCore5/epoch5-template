@@ -104,7 +104,7 @@ class TestPolicyManager:
         grantee_did = "did:epoch5:grantee"
         resource = "test_resource"
         actions = ["access"]
-        
+
         grant = policy_manager.create_grant(
             "register_test", grantee_did, resource, actions, {}
         )
@@ -121,14 +121,16 @@ class TestPolicyManager:
         grantee_did = "did:epoch5:grantee"
         resource = "test_resource"
         actions = ["read", "write"]
-        
+
         grant = policy_manager.create_grant(
             "verify_test", grantee_did, resource, actions, {}
         )
         policy_manager.add_grant(grant)
 
         # Test verification
-        result = policy_manager.check_grant("verify_test", grantee_did, resource, "read")
+        result = policy_manager.check_grant(
+            "verify_test", grantee_did, resource, "read"
+        )
         assert result is True
 
     def test_policy_evaluation(self, policy_manager):

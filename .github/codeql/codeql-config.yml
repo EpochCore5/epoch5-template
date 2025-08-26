@@ -1,0 +1,16 @@
+name: "Python Security Analysis"
+
+disable-default-queries: false
+
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+paths-ignore:
+  - tests/
+  - htmlcov/
+  - .pytest_cache/
+  - __pycache__/
+
+paths:
+  - "**/*.py"

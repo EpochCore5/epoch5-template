@@ -9,12 +9,9 @@ Integrates with EPOCH5 provenance tracking system
 import json
 import hashlib
 import zipfile
-import os
-from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple
-import base64
-import struct
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 
 
 class MerkleTree:
