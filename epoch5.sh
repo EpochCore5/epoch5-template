@@ -54,8 +54,15 @@ sha256() {
 }
 
 ensure_dirs() {
-  mkdir -p "$OUT_DIR" "$MAN_DIR"
-  touch "$LEDGER" "$HEARTBEAT" "$INCOMING_TIDE"
+  if ! mkdir -p "$OUT_DIR" "$MAN_DIR"; then
+    echo "Error: Failed to create directories. Check permissions for: $OUT_DIR" >&2
+    exit 1
+  fi
+  
+  if ! touch "$LEDGER" "$HEARTBEAT" "$INCOMING_TIDE"; then
+    echo "Error: Failed to create log files. Check write permissions." >&2
+    exit 1
+  fi
 }
 
 prev_hash() {
@@ -85,7 +92,7 @@ write_manifest() {
   man_file="$MAN_DIR/${pass_id}_manifest.txt"
   
   # Write manifest
-  cat > "$man_file" <<EOF
+  if ! cat > "$man_file" <<EOF
 EPOCH 5 MANIFEST
 ================
 ARC_ID: $ARC_ID
@@ -102,9 +109,17 @@ $payload
 FOUNDER_NOTE:
 $note
 EOF
+  then
+    echo "Error: Failed to write manifest to $man_file" >&2
+    exit 1
+  fi
 
   # Append to ledger
-  echo "$record_body|RECORD_HASH=$record_hash" >> "$LEDGER"
+  if ! echo "$record_body|RECORD_HASH=$record_hash" >> "$LEDGER"; then
+    echo "Error: Failed to append to ledger: $LEDGER" >&2
+    exit 1
+  fi
+  
   echo "Manifest written: $man_file"
 }
 

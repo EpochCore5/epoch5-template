@@ -24,6 +24,8 @@ wheels/
 .pytest_cache/
 .coverage
 htmlcov/
+/tmp/
+epoch5_test_*/
 
 # Virtual environments
 venv/
