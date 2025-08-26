@@ -1,0 +1,21 @@
+rules:
+  - id: epoch5-hardcoded-secret
+    pattern: |
+      $KEY = "$SECRET"
+    message: Potential hardcoded secret detected
+    languages: [python, javascript, bash]
+    severity: WARNING
+    
+  - id: epoch5-weak-crypto
+    pattern: |
+      hashlib.md5(...)
+    message: MD5 is cryptographically weak, use SHA-256 or stronger
+    languages: [python]
+    severity: WARNING
+    
+  - id: epoch5-shell-injection
+    pattern: |
+      os.system($CMD)
+    message: Potential shell injection vulnerability
+    languages: [python]
+    severity: ERROR

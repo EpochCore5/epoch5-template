@@ -27,6 +27,23 @@ try:
 except ImportError:
     CEILING_MANAGER_AVAILABLE = False
 
+# Import monitoring system
+try:
+    from monitoring import get_metrics_collector, timing_context, increment_counter, set_gauge
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    # Provide dummy functions if monitoring not available
+    def get_metrics_collector(*args, **kwargs):
+        return None
+    def timing_context(name, tags=None):
+        from contextlib import nullcontext
+        return nullcontext()
+    def increment_counter(*args, **kwargs):
+        pass
+    def set_gauge(*args, **kwargs):
+        pass
+
 class EPOCH5Integration:
     """Main integration class for EPOCH5 system"""
     
@@ -34,13 +51,19 @@ class EPOCH5Integration:
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
         
+        # Initialize monitoring
+        if MONITORING_AVAILABLE:
+            self.metrics_collector = get_metrics_collector(str(base_dir))
+            increment_counter("system.init")
+        
         # Initialize all managers
-        self.agent_manager = AgentManager(str(base_dir))
-        self.policy_manager = PolicyManager(str(base_dir))
-        self.dag_manager = DAGManager(str(base_dir))
-        self.cycle_executor = CycleExecutor(str(base_dir))
-        self.capsule_manager = CapsuleManager(str(base_dir))
-        self.meta_capsule_creator = MetaCapsuleCreator(str(base_dir))
+        with timing_context("system.manager_init"):
+            self.agent_manager = AgentManager(str(base_dir))
+            self.policy_manager = PolicyManager(str(base_dir))
+            self.dag_manager = DAGManager(str(base_dir))
+            self.cycle_executor = CycleExecutor(str(base_dir))
+            self.capsule_manager = CapsuleManager(str(base_dir))
+            self.meta_capsule_creator = MetaCapsuleCreator(str(base_dir))
         
         # Initialize ceiling manager if available
         if CEILING_MANAGER_AVAILABLE:
@@ -244,71 +267,90 @@ class EPOCH5Integration:
     
     def run_complete_workflow(self) -> Dict[str, Any]:
         """Run a complete workflow demonstrating all system integration"""
-        workflow_results = {
-            "started_at": self.timestamp(),
-            "steps": {},
-            "errors": []
-        }
-        
-        try:
-            # Step 1: Execute DAG
-            dag_result = self.dag_manager.execute_dag("demo_dag", simulation=True)
-            workflow_results["steps"]["dag_execution"] = {
-                "status": dag_result.get("final_status"),
-                "completed_tasks": len(dag_result.get("completed_tasks", [])),
-                "failed_tasks": len(dag_result.get("failed_tasks", []))
+        with timing_context("workflow.complete_execution"):
+            increment_counter("workflow.started")
+            
+            workflow_results = {
+                "started_at": self.timestamp(),
+                "steps": {},
+                "errors": []
             }
             
-            # Step 2: Execute Cycle
-            validator_nodes = ["validator_1", "validator_2", "validator_3"]
-            cycle_result = self.cycle_executor.execute_full_cycle("demo_cycle", validator_nodes, simulation=True)
-            workflow_results["steps"]["cycle_execution"] = {
-                "status": cycle_result.get("status"),
-                "sla_compliant": cycle_result.get("sla_compliance", {}).get("compliant"),
-                "success_rate": cycle_result.get("final_metrics", {}).get("success_rate")
-            }
+            try:
+                # Step 1: Execute DAG
+                with timing_context("workflow.dag_execution"):
+                    dag_result = self.dag_manager.execute_dag("demo_dag", simulation=True)
+                    workflow_results["steps"]["dag_execution"] = {
+                        "status": dag_result.get("final_status"),
+                        "completed_tasks": len(dag_result.get("completed_tasks", [])),
+                        "failed_tasks": len(dag_result.get("failed_tasks", []))
+                    }
+                    increment_counter("workflow.dag_executed")
+                    set_gauge("workflow.last_dag_tasks_completed", len(dag_result.get("completed_tasks", [])))
+                
+                # Step 2: Execute Cycle
+                with timing_context("workflow.cycle_execution"):
+                    validator_nodes = ["validator_1", "validator_2", "validator_3"]
+                    cycle_result = self.cycle_executor.execute_full_cycle("demo_cycle", validator_nodes, simulation=True)
+                    workflow_results["steps"]["cycle_execution"] = {
+                        "status": cycle_result.get("status"),
+                        "sla_compliant": cycle_result.get("sla_compliance", {}).get("compliant"),
+                        "success_rate": cycle_result.get("final_metrics", {}).get("success_rate")
+                    }
+                    increment_counter("workflow.cycle_executed")
+                    success_rate = cycle_result.get("final_metrics", {}).get("success_rate", 0)
+                    set_gauge("workflow.last_cycle_success_rate", success_rate)
+                
+                # Step 3: Verify capsule integrity
+                with timing_context("workflow.capsule_verification"):
+                    integrity_result = self.capsule_manager.verify_capsule_integrity("demo_capsule")
+                    workflow_results["steps"]["capsule_verification"] = {
+                        "valid": integrity_result.get("overall_valid"),
+                        "content_hash_valid": integrity_result.get("content_hash_valid"),
+                        "merkle_valid": integrity_result.get("merkle_verification", {}).get("root_valid")
+                    }
+                    increment_counter("workflow.capsule_verified")
+                    set_gauge("workflow.capsule_integrity_valid", 1 if integrity_result.get("overall_valid") else 0)
+                
+                # Step 4: Create comprehensive archive
+                with timing_context("workflow.archive_creation"):
+                    archive_result = self.capsule_manager.create_archive(
+                        "workflow_archive",
+                        ["demo_capsule"],
+                        include_metadata=True
+                    )
+                    workflow_results["steps"]["archive_creation"] = {
+                        "status": archive_result.get("status"),
+                        "file_count": archive_result.get("file_count"),
+                        "archive_hash": archive_result.get("archive_hash")
+                    }
+                    increment_counter("workflow.archive_created")
+                    set_gauge("workflow.last_archive_file_count", archive_result.get("file_count", 0))
+                
+                # Step 5: Create meta-capsule
+                with timing_context("workflow.meta_capsule_creation"):
+                    meta_capsule = self.meta_capsule_creator.create_meta_capsule(
+                        "workflow_meta_capsule",
+                        "Meta-capsule created from complete workflow execution"
+                    )
+                    workflow_results["steps"]["meta_capsule_creation"] = {
+                        "meta_capsule_id": meta_capsule["meta_capsule_id"],
+                        "systems_captured": len(meta_capsule["system_state"]["systems"]),
+                        "files_captured": meta_capsule["system_state"]["summary_stats"]["total_files_captured"],
+                        "meta_hash": meta_capsule["meta_hash"]
+                    }
+                    increment_counter("workflow.meta_capsule_created")
+                
+                workflow_results["completed_at"] = self.timestamp()
+                workflow_results["success"] = True
+                increment_counter("workflow.completed_successfully")
+            except Exception as e:
+                workflow_results["errors"].append(str(e))
+                workflow_results["success"] = False
+                increment_counter("workflow.failed")
             
-            # Step 3: Verify capsule integrity
-            integrity_result = self.capsule_manager.verify_capsule_integrity("demo_capsule")
-            workflow_results["steps"]["capsule_verification"] = {
-                "valid": integrity_result.get("overall_valid"),
-                "content_hash_valid": integrity_result.get("content_hash_valid"),
-                "merkle_valid": integrity_result.get("merkle_verification", {}).get("root_valid")
-            }
-            
-            # Step 4: Create comprehensive archive
-            archive_result = self.capsule_manager.create_archive(
-                "workflow_archive",
-                ["demo_capsule"],
-                include_metadata=True
-            )
-            workflow_results["steps"]["archive_creation"] = {
-                "status": archive_result.get("status"),
-                "file_count": archive_result.get("file_count"),
-                "archive_hash": archive_result.get("archive_hash")
-            }
-            
-            # Step 5: Create meta-capsule
-            meta_capsule = self.meta_capsule_creator.create_meta_capsule(
-                "workflow_meta_capsule",
-                "Meta-capsule created from complete workflow execution"
-            )
-            workflow_results["steps"]["meta_capsule_creation"] = {
-                "meta_capsule_id": meta_capsule["meta_capsule_id"],
-                "systems_captured": len(meta_capsule["system_state"]["systems"]),
-                "files_captured": meta_capsule["system_state"]["summary_stats"]["total_files_captured"],
-                "meta_hash": meta_capsule["meta_hash"]
-            }
-            
-            workflow_results["completed_at"] = self.timestamp()
-            workflow_results["success"] = True
-            
-        except Exception as e:
-            workflow_results["errors"].append(str(e))
-            workflow_results["success"] = False
-        
-        self.log_integration_event("COMPLETE_WORKFLOW", workflow_results)
-        return workflow_results
+            self.log_integration_event("COMPLETE_WORKFLOW", workflow_results)
+            return workflow_results
     
     def get_system_status(self) -> Dict[str, Any]:
         """Get comprehensive system status"""

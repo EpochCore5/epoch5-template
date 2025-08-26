@@ -1,0 +1,33 @@
+# GitLeaks configuration for EPOCH5 Template
+title = "EPOCH5 GitLeaks Configuration"
+
+[extend]
+# Extend default gitleaks config
+useDefault = true
+
+[[rules]]
+id = "epoch5-api-key"
+description = "EPOCH5 API Key"
+regex = '''epoch5[_-]?api[_-]?key\s*[:=]\s*['""]?([A-Za-z0-9+/]{32,})['""]?'''
+keywords = ["epoch5", "api", "key"]
+
+[[rules]]
+id = "epoch5-secret-token"
+description = "EPOCH5 Secret Token"
+regex = '''epoch5[_-]?secret[_-]?token\s*[:=]\s*['""]?([A-Za-z0-9+/]{40,})['""]?'''
+keywords = ["epoch5", "secret", "token"]
+
+[[rules]]
+id = "epoch5-private-key"
+description = "EPOCH5 Private Key"
+regex = '''-----BEGIN [A-Z ]+ PRIVATE KEY-----'''
+keywords = ["PRIVATE", "KEY"]
+
+# Allowlist certain patterns
+[[allowlist]]
+description = "Test files"
+paths = ['''.*test.*''', '''.*spec.*''']
+
+[[allowlist]]
+description = "Example configurations"
+paths = ['''.*example.*''', '''.*sample.*''']

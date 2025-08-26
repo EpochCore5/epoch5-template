@@ -1,0 +1,9 @@
+# Security configuration for bandit
+[tool.bandit]
+exclude_dirs = ["tests", "venv", "env", ".venv", ".env"]
+skips = ["B101"]  # Skip assert_used test in test files
+
+# Security configuration for semgrep
+# This file helps configure semgrep scanning rules
+[tool.bandit.assert_used]
+skips = ["*test*.py", "*tests*.py"]

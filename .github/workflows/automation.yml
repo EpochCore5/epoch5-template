@@ -1,0 +1,180 @@
+name: Issue and PR Automation
+
+on:
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  auto-label-issues:
+    name: Auto-label Issues
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
+    
+    steps:
+    - name: Label bug reports
+      if: contains(github.event.issue.title, 'bug') || contains(github.event.issue.body, 'bug') || contains(github.event.issue.labels.*.name, 'bug')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['bug', 'needs-triage']
+          })
+
+    - name: Label feature requests
+      if: contains(github.event.issue.title, 'feature') || contains(github.event.issue.title, 'enhancement') || contains(github.event.issue.body, 'feature request')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['enhancement', 'feature-request']
+          })
+
+    - name: Label security issues
+      if: contains(github.event.issue.title, 'security') || contains(github.event.issue.body, 'security') || contains(github.event.issue.body, 'vulnerability')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['security', 'priority-high']
+          })
+
+    - name: Label documentation issues
+      if: contains(github.event.issue.title, 'docs') || contains(github.event.issue.title, 'documentation') || contains(github.event.issue.body, 'documentation')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['documentation']
+          })
+
+  auto-label-prs:
+    name: Auto-label Pull Requests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Label based on changed files
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const pr_number = context.payload.pull_request.number;
+          
+          // Get list of changed files
+          const { data: files } = await github.rest.pulls.listFiles({
+            owner,
+            repo,
+            pull_request_number: pr_number
+          });
+          
+          const labels = [];
+          const filenames = files.map(f => f.filename);
+          
+          // Security-related files
+          if (filenames.some(f => f.includes('security') || f.includes('.github/workflows/security'))) {
+            labels.push('security');
+          }
+          
+          // CI/CD changes
+          if (filenames.some(f => f.includes('.github/workflows') || f.includes('.github/dependabot'))) {
+            labels.push('ci-cd', 'infrastructure');
+          }
+          
+          // Documentation changes
+          if (filenames.some(f => f.endsWith('.md') || f.includes('docs/'))) {
+            labels.push('documentation');
+          }
+          
+          // Python code changes
+          if (filenames.some(f => f.endsWith('.py'))) {
+            labels.push('python');
+          }
+          
+          // Shell script changes
+          if (filenames.some(f => f.endsWith('.sh'))) {
+            labels.push('shell-scripts');
+          }
+          
+          // Test changes
+          if (filenames.some(f => f.includes('test') || f.includes('spec'))) {
+            labels.push('tests');
+          }
+          
+          // Core system changes
+          if (filenames.some(f => f.includes('epoch5.sh') || f.includes('integration.py'))) {
+            labels.push('core-system');
+          }
+          
+          if (labels.length > 0) {
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: pr_number,
+              labels
+            });
+          }
+
+  auto-assign-reviewers:
+    name: Auto-assign Reviewers
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    
+    steps:
+    - name: Request review from code owners
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const pr_number = context.payload.pull_request.number;
+          
+          // Auto-assign reviewers based on changed files or labels
+          await github.rest.pulls.requestReviewers({
+            owner,
+            repo,
+            pull_request_number: pr_number,
+            reviewers: ['Jvryan92']
+          });
+
+  stale-issue-management:
+    name: Stale Issue Management
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Mark stale issues
+      uses: actions/stale@v8
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: |
+          This issue has been automatically marked as stale because it has not had recent activity. 
+          It will be closed if no further activity occurs within 7 days. 
+          If this issue is still relevant, please comment to keep it open.
+        stale-pr-message: |
+          This pull request has been automatically marked as stale because it has not had recent activity. 
+          It will be closed if no further activity occurs within 7 days. 
+          If this PR is still relevant, please comment to keep it open.
+        stale-issue-label: 'stale'
+        stale-pr-label: 'stale'
+        days-before-stale: 30
+        days-before-close: 7
+        exempt-issue-labels: 'security,priority-high,pinned'
+        exempt-pr-labels: 'security,priority-high,work-in-progress'
