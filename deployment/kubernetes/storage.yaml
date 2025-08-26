@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: epoch5-archive-pvc
+  labels:
+    app: epoch5
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: epoch5-logs-pvc
+  labels:
+    app: epoch5
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: epoch5-config
+  labels:
+    app: epoch5
+data:
+  environment: "production"
+  log_level: "INFO"
+  pythonpath: "/app"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: epoch5-secrets
+  labels:
+    app: epoch5
+type: Opaque
+data:
+  # Base64 encoded secrets
+  database_password: ""  # Add your base64 encoded password
+  api_key: ""            # Add your base64 encoded API key

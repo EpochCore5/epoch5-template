@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: epoch5-stable
+  labels:
+    app: epoch5
+    version: stable
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: epoch5
+      version: stable
+  template:
+    metadata:
+      labels:
+        app: epoch5
+        version: stable
+    spec:
+      containers:
+      - name: epoch5-app
+        image: ghcr.io/epochcore5/epoch5-template:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: VERSION
+          value: "stable"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: archive-storage
+          mountPath: /app/archive
+        - name: logs-storage
+          mountPath: /app/logs
+      volumes:
+      - name: archive-storage
+        persistentVolumeClaim:
+          claimName: epoch5-archive-pvc
+      - name: logs-storage
+        persistentVolumeClaim:
+          claimName: epoch5-logs-pvc
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: epoch5-canary
+  labels:
+    app: epoch5
+    version: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: epoch5
+      version: canary
+  template:
+    metadata:
+      labels:
+        app: epoch5
+        version: canary
+    spec:
+      containers:
+      - name: epoch5-app
+        image: ghcr.io/epochcore5/epoch5-template:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: "canary"
+        - name: VERSION
+          value: "canary"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: archive-storage
+          mountPath: /app/archive
+        - name: logs-storage
+          mountPath: /app/logs
+      volumes:
+      - name: archive-storage
+        persistentVolumeClaim:
+          claimName: epoch5-archive-pvc
+      - name: logs-storage
+        persistentVolumeClaim:
+          claimName: epoch5-logs-pvc
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000

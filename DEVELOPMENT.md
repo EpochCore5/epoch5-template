@@ -87,12 +87,34 @@ epoch5-template/
 ├── integration.py          # Main system integration
 ├── meta_capsule.py         # System state capture
 ├── policy_grants.py        # Security policies and grants
+├── health_server.py        # HTTP health check server
 ├── tests/                  # Test suite
 │   ├── test_integration.py
 │   ├── test_agent_management.py
 │   ├── test_policy_grants.py
 │   └── test_capsule_metadata.py
-└── .github/workflows/      # CI/CD pipelines
+├── .github/workflows/      # CI/CD pipelines
+├── deployment/             # Deployment configurations
+│   ├── kubernetes/         # Kubernetes manifests
+│   ├── aws/               # AWS configurations
+│   ├── azure/             # Azure configurations
+│   └── README.md          # Deployment guide
+├── infrastructure/         # Infrastructure as Code
+│   └── terraform/         # Terraform configurations
+├── monitoring/            # Monitoring stack configurations
+│   ├── prometheus/        # Prometheus config and rules
+│   ├── grafana/          # Grafana dashboards
+│   ├── logstash/         # Log processing config
+│   └── alertmanager/     # Alerting configuration
+├── scripts/              # Deployment and utility scripts
+│   ├── deploy-blue-green.sh  # Blue/green deployment
+│   ├── deploy-canary.sh      # Canary deployment
+│   ├── rollback.sh           # Emergency rollback
+│   └── setup-env.sh          # Environment setup
+├── Dockerfile            # Container build configuration
+├── docker-compose.yml    # Full monitoring stack
+├── docker-compose.dev.yml # Development environment
+└── CICD_ENHANCEMENT.md   # CI/CD pipeline documentation
 ```
 
 ## Testing Guidelines

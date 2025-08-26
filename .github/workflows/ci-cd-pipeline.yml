@@ -10,6 +10,10 @@ on:
       - main
       - develop
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -90,6 +94,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, security]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -109,6 +116,86 @@ jobs:
           python integration.py setup-demo
           python integration.py status
           python integration.py validate
-      
-      - name: Deploy
-        run: echo "Deployment would occur here for production releases"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Blue-Green Deployment job (conditional)
+  deploy-blue-green:
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://your-domain.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Blue Environment
+        run: |
+          echo "Deploying to blue environment..."
+          echo "IMAGE_TAG=${{ needs.deploy.outputs.image-tag }}" >> $GITHUB_ENV
+          # This would typically call your deployment script
+          # ./scripts/deploy-blue.sh ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Run Health Check on Blue
+        run: |
+          echo "Running health checks on blue environment..."
+          # ./scripts/health-check.sh blue
+          sleep 30
+
+      - name: Switch Traffic to Blue
+        run: |
+          echo "Switching traffic from green to blue..."
+          # ./scripts/switch-traffic.sh blue
+
+      - name: Terminate Green Environment
+        run: |
+          echo "Terminating green environment..."
+          # ./scripts/terminate-green.sh
+
+  # Rollback job (manual trigger)
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment:
+      name: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Rollback to Previous Version
+        run: |
+          echo "Rolling back to previous stable version..."
+          # Get the previous successful deployment
+          # ./scripts/rollback.sh

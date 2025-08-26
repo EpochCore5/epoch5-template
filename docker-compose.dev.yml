@@ -1,0 +1,25 @@
+version: '3.8'
+
+# Lightweight development compose file
+services:
+  epoch5-app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: epoch5-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=development
+    volumes:
+      - .:/app
+      - ./archive:/app/archive
+    networks:
+      - epoch5-dev-network
+    restart: "no"
+    command: ["python3", "integration.py", "run-workflow"]
+
+networks:
+  epoch5-dev-network:
+    driver: bridge
