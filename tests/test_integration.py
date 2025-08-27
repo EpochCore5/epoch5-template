@@ -82,8 +82,8 @@ class TestEPOCH5Integration:
         # This should not raise an exception
         integration_system.log_integration_event(event_type, event_data)
 
-        # Check that log file exists in the correct location
-        log_file = integration_system.base_dir / "integration_events.log"
+        # Check that log file exists - the log file is integration.log, not integration_events.log
+        log_file = integration_system.base_dir / "integration.log"
         assert log_file.exists()
 
     def test_validate_system_integrity_empty(self, integration_system):
