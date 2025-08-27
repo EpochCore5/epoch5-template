@@ -87,7 +87,9 @@ class TestPolicyManager:
         actions = ["read", "execute"]
         conditions = {"valid_until": "2024-12-31T23:59:59Z"}
 
-        grant = policy_manager.create_grant(grant_id, grantee_did, resource, actions, conditions)
+        grant = policy_manager.create_grant(
+            grant_id, grantee_did, resource, actions, conditions
+        )
 
         assert isinstance(grant, dict)
         assert grant["grant_id"] == grant_id
@@ -103,8 +105,10 @@ class TestPolicyManager:
         resource = "test_resource"
         actions = ["access"]
         conditions = {}
-        
-        grant = policy_manager.create_grant("register_test", grantee_did, resource, actions, conditions)
+
+        grant = policy_manager.create_grant(
+            "register_test", grantee_did, resource, actions, conditions
+        )
 
         result = policy_manager.add_grant(grant)
         assert result is True
@@ -118,12 +122,16 @@ class TestPolicyManager:
         grantee_did = "grantee"
         resource = "test_resource"
         actions = ["read", "write"]
-        
-        grant = policy_manager.create_grant("verify_test", grantee_did, resource, actions)
+
+        grant = policy_manager.create_grant(
+            "verify_test", grantee_did, resource, actions
+        )
         policy_manager.add_grant(grant)
 
         # Test verification - using proper method signature
-        result = policy_manager.check_grant("verify_test", grantee_did, resource, "read")
+        result = policy_manager.check_grant(
+            "verify_test", grantee_did, resource, "read"
+        )
         assert isinstance(result, bool)
 
     def test_policy_evaluation(self, policy_manager):

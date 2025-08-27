@@ -80,9 +80,7 @@ class TestAgentManager:
         original_score = agent["reliability_score"]
 
         # Use the actual method signature: update_agent_stats(did, success, latency)
-        result = agent_manager.update_agent_stats(
-            agent["did"], True, 0.5
-        )
+        result = agent_manager.update_agent_stats(agent["did"], True, 0.5)
         assert result is True
 
         updated_agent = agent_manager.get_agent(agent["did"])
@@ -90,13 +88,11 @@ class TestAgentManager:
         assert updated_agent["reliability_score"] == 1.0
         assert updated_agent["total_tasks"] == 1
         assert updated_agent["successful_tasks"] == 1
-        
+
         # Now test a failed task to see score decrease
-        result2 = agent_manager.update_agent_stats(
-            agent["did"], False, 1.0
-        )
+        result2 = agent_manager.update_agent_stats(agent["did"], False, 1.0)
         assert result2 is True
-        
+
         updated_agent2 = agent_manager.get_agent(agent["did"])
         # After failed task: 1 success / 2 total = 0.5
         assert updated_agent2["reliability_score"] == 0.5
