@@ -258,7 +258,7 @@ class CapsuleManager:
         """Verify the integrity of a capsule using Merkle proofs"""
         capsule = self.load_capsule(capsule_id)
         if not capsule:
-            return {"error": "Capsule not found"}
+            return {"error": "Capsule not found", "overall_valid": False}
 
         content = self.get_capsule_content(capsule_id)
         if content is None:
@@ -410,7 +410,9 @@ class CapsuleManager:
                 ).hexdigest()
 
             archive_info["archive_file"] = str(archive_file)
+            archive_info["archive_path"] = str(archive_file)  # Backward compatibility
             archive_info["status"] = "completed"
+            archive_info["success"] = True
 
             # Save archive metadata
             archive_metadata_file = self.archives_dir / f"{archive_id}_metadata.json"
@@ -492,7 +494,12 @@ class CapsuleManager:
     def list_capsules(self) -> List[Dict[str, Any]]:
         """List all capsules"""
         index = self.load_index(self.capsules_index)
-        return list(index["capsules"].values())
+        capsules = []
+        for capsule_id, capsule_data in index["capsules"].items():
+            capsule_data_with_id = capsule_data.copy()
+            capsule_data_with_id["capsule_id"] = capsule_id
+            capsules.append(capsule_data_with_id)
+        return capsules
 
     def list_archives(self) -> List[Dict[str, Any]]:
         """List all archives"""

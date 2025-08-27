@@ -64,7 +64,7 @@ class TestCapsuleManager:
         capsule_manager.update_capsule_index(capsule)
 
         # Verify capsule is indexed
-        index = capsule_manager.load_index()
+        index = capsule_manager.load_index(capsule_manager.capsules_index)
         assert capsule_id in index["capsules"]
 
     def test_get_capsule(self, capsule_manager):
