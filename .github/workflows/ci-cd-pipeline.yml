@@ -27,30 +27,49 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Cache pip dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python${{ matrix.python-version }}/site-packages
+          key: ${{ runner.os }}-python${{ matrix.python-version }}-pip-${{ hashFiles('**/requirements.txt', '**/setup.cfg') }}
           restore-keys: |
+            ${{ runner.os }}-python${{ matrix.python-version }}-pip-
+            ${{ runner.os }}-python${{ matrix.python-version }}-
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          echo "::group::Upgrading pip"
+          python -m pip install --upgrade pip -v
+          echo "::endgroup::"
+          echo "::group::Installing requirements"
+          pip install -r requirements.txt -v
+          echo "::endgroup::"
+          echo "::group::Installed packages"
+          pip list
+          echo "::endgroup::"
       
       - name: Run linting with flake8
         run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+          echo "::group::Running critical error checks"
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --verbose
+          echo "::endgroup::"
+          echo "::group::Running full linting checks"
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics --verbose
+          echo "::endgroup::"
 
       - name: Run code formatting check with black
         run: |
-          black --check --diff .
+          echo "::group::Checking code formatting"
+          black --check --diff --verbose .
+          echo "::endgroup::"
 
       - name: Run tests with pytest
         run: |
-          pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
+          echo "::group::Running test suite"
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=html --tb=short --durations=10
+          echo "::endgroup::"
         
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
@@ -72,19 +91,40 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python3.11/site-packages
+          key: ${{ runner.os }}-python3.11-pip-security-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python3.11-pip-security-
+            ${{ runner.os }}-python3.11-pip-
+
       - name: Install security scanning tools
         run: |
-          python -m pip install --upgrade pip
-          pip install safety bandit
+          echo "::group::Installing security tools"
+          python -m pip install --upgrade pip -v
+          pip install safety bandit -v
+          echo "::endgroup::"
 
       - name: Run dependency security scan
         run: |
-          pip install -r requirements.txt
-          safety check --json || true
+          echo "::group::Installing dependencies for security scan"
+          pip install -r requirements.txt -v
+          echo "::endgroup::"
+          echo "::group::Running safety scan"
+          safety check --json --output safety-report.json || true
+          echo "Security scan completed"
+          echo "::endgroup::"
 
       - name: Run code security scan with bandit
         run: |
-          bandit -r . -f json || true
+          echo "::group::Running bandit security scan"
+          bandit -r . -f json -o bandit-report.json || true
+          echo "Bandit scan completed"
+          echo "::endgroup::"
 
   deploy:
     runs-on: ubuntu-latest
@@ -99,16 +139,39 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python3.11/site-packages
+          key: ${{ runner.os }}-python3.11-pip-deploy-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python3.11-pip-deploy-
+            ${{ runner.os }}-python3.11-pip-
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          echo "::group::Installing dependencies for deployment"
+          python -m pip install --upgrade pip -v
+          pip install -r requirements.txt -v
+          echo "::endgroup::"
       
       - name: Run integration tests
         run: |
+          echo "::group::Setting up demo environment"
           python integration.py setup-demo
+          echo "::endgroup::"
+          echo "::group::Checking system status"
           python integration.py status
+          echo "::endgroup::"
+          echo "::group::Validating system integrity"
           python integration.py validate
+          echo "::endgroup::"
       
       - name: Deploy
-        run: echo "Deployment would occur here for production releases"
+        run: |
+          echo "::group::Production deployment"
+          echo "Deployment would occur here for production releases"
+          echo "All checks passed - system ready for deployment"
+          echo "::endgroup::"

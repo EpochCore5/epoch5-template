@@ -80,9 +80,7 @@ class TestAgentManager:
         original_score = agent["reliability_score"]
 
         # Update agent stats with success=True and latency=100ms
-        result = agent_manager.update_agent_stats(
-            agent["did"], True, 100.0
-        )
+        result = agent_manager.update_agent_stats(agent["did"], True, 100.0)
         assert result is True
 
         updated_agent = agent_manager.get_agent(agent["did"])

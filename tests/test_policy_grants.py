@@ -105,7 +105,7 @@ class TestPolicyManager:
         resource = "test_resource"
         actions = ["access"]
         conditions = {}
-        
+
         grant = policy_manager.create_grant(
             "register_test", grantee_did, resource, actions, conditions
         )
@@ -123,7 +123,7 @@ class TestPolicyManager:
         resource = "test_resource"
         actions = ["read", "write"]
         conditions = {}
-        
+
         grant = policy_manager.create_grant(
             "verify_test", grantee_did, resource, actions, conditions
         )
