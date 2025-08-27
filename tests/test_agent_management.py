@@ -81,9 +81,7 @@ class TestAgentManager:
 
         # Use the actual method available: update_agent_stats
         # Method signature: update_agent_stats(did: str, success: bool, latency: float)
-        result = agent_manager.update_agent_stats(
-            agent["did"], True, 0.1
-        )
+        result = agent_manager.update_agent_stats(agent["did"], True, 0.1)
         assert result is True
 
         updated_agent = agent_manager.get_agent(agent["did"])
