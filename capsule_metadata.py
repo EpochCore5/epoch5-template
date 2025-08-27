@@ -492,7 +492,12 @@ class CapsuleManager:
     def list_capsules(self) -> List[Dict[str, Any]]:
         """List all capsules"""
         index = self.load_index(self.capsules_index)
-        return list(index["capsules"].values())
+        capsules = []
+        for capsule_id, capsule_data in index["capsules"].items():
+            capsule_with_id = capsule_data.copy()
+            capsule_with_id["capsule_id"] = capsule_id
+            capsules.append(capsule_with_id)
+        return capsules
 
     def list_archives(self) -> List[Dict[str, Any]]:
         """List all archives"""

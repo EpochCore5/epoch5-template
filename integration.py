@@ -51,7 +51,7 @@ class EPOCH5Integration:
             self.ceiling_manager = None
 
         # Integration log
-        self.integration_log = self.base_dir / "integration.log"
+        self.integration_log = self.base_dir / "integration_events.log"
 
     def timestamp(self) -> str:
         """Generate ISO timestamp"""
