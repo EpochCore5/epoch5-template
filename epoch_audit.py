@@ -1,0 +1,480 @@
+"""
+EPOCH5 Audit System
+
+This module provides audit logging, ceiling enforcement, and security mechanisms
+integrated with the agent monitoring system. Features derived from Alpha Ceiling,
+GBTEpoch, and Phone Audit Scroll concepts.
+
+Features:
+- Secure audit logging with cryptographic seals
+- Value ceiling enforcement (prevent exceeding thresholds)
+- Timestamped records with epoch tracking
+- Audit log visualization and export
+"""
+
+import os
+import time
+import json
+import hashlib
+import logging
+import datetime
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Union
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger("EpochAudit")
+
+
+class EpochAudit:
+    """
+    EPOCH5 Audit System for secure logging and monitoring of agent activities
+    with ceiling enforcement and cryptographic sealing.
+    """
+    
+    def __init__(self, base_dir: str = "./archive/EPOCH5"):
+        """
+        Initialize the audit system
+        
+        Args:
+            base_dir: Base directory for EPOCH5 systems
+        """
+        self.base_dir = Path(base_dir)
+        self.audit_dir = self.base_dir / "audit"
+        self.ledger_dir = self.audit_dir / "ledger"
+        self.seals_dir = self.audit_dir / "seals"
+        self.capsules_dir = self.audit_dir / "capsules"
+        
+        # Create necessary directories
+        self.audit_dir.mkdir(parents=True, exist_ok=True)
+        self.ledger_dir.mkdir(exist_ok=True)
+        self.seals_dir.mkdir(exist_ok=True)
+        self.capsules_dir.mkdir(exist_ok=True)
+        
+        # Main ledger file
+        self.ledger_file = self.ledger_dir / "epoch_ledger.jsonl"
+        
+        # Default ceiling values for different metrics
+        self.ceilings = {
+            "task_priority": 100,
+            "resource_allocation": 100,
+            "message_rate": 20,  # per minute
+            "concurrent_tasks": 10
+        }
+        
+        # Initialize GBTEpoch capsule
+        self._init_gbt_epoch()
+        
+        logger.info("EPOCH5 Audit System initialized")
+    
+    def _init_gbt_epoch(self):
+        """Initialize GBTEpoch capsule for timestamp reference"""
+        timestamp = self._get_iso_timestamp()
+        epoch_time = int(time.time())
+        
+        # Create GBTEpoch capsule
+        capsule_data = {
+            "ts": timestamp,
+            "capsule": "GBTEpoch_init",
+            "epoch": epoch_time,
+            "status": "active",
+            "sha256": self._generate_hash(f"GBTEpoch_init_{timestamp}_{epoch_time}")
+        }
+        
+        # Save capsule
+        capsule_file = self.capsules_dir / "gbtepoch_init.json"
+        with open(capsule_file, "w") as f:
+            json.dump(capsule_data, f, indent=2)
+        
+        # Log initialization
+        self.log_event("gbtepoch_init", f"Initialized GBTEpoch reference at {epoch_time}")
+    
+    def _get_iso_timestamp(self) -> str:
+        """Get current ISO 8601 timestamp in UTC"""
+        return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    
+    def _generate_hash(self, data: str) -> str:
+        """Generate SHA-256 hash of data"""
+        return hashlib.sha256(data.encode('utf-8')).hexdigest()
+    
+    def log_event(self, event_type: str, note: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Log an event to the audit ledger with timestamp and seal
+        
+        Args:
+            event_type: Type of event (e.g., 'task_execution', 'ceiling_enforcement')
+            note: Description of the event
+            data: Additional event data
+            
+        Returns:
+            Event record with seal
+        """
+        timestamp = self._get_iso_timestamp()
+        epoch_time = int(time.time())
+        
+        # Create event record
+        event = {
+            "ts": timestamp,
+            "event": event_type,
+            "note": note,
+            "epoch": epoch_time
+        }
+        
+        # Add additional data if provided
+        if data:
+            event["data"] = data
+        
+        # Generate seal
+        seal_payload = f"{timestamp}|{event_type}|{note}|{epoch_time}"
+        if data:
+            seal_payload += f"|{json.dumps(data, sort_keys=True)}"
+        
+        event["seal"] = self._generate_hash(seal_payload)
+        
+        # Append to ledger
+        with open(self.ledger_file, "a") as f:
+            f.write(json.dumps(event) + "\n")
+        
+        # Create separate seal file for critical events
+        if event_type in ["ceiling_enforcement", "security_violation", "system_change"]:
+            seal_file = self.seals_dir / f"{event_type}_{timestamp.replace(':', '-')}.seal"
+            with open(seal_file, "w") as f:
+                f.write(f"EVENT: {event_type}\n")
+                f.write(f"TIMESTAMP: {timestamp}\n")
+                f.write(f"EPOCH: {epoch_time}\n")
+                f.write(f"NOTE: {note}\n")
+                f.write(f"SEAL: {event['seal']}\n")
+                if data:
+                    f.write(f"DATA: {json.dumps(data, indent=2)}\n")
+        
+        return event
+    
+    def enforce_ceiling(self, value_type: str, value: Union[int, float], 
+                       agent_did: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Enforce ceiling on a value, capping it if it exceeds the ceiling
+        
+        Args:
+            value_type: Type of value to check (must be in self.ceilings)
+            value: The value to check and potentially cap
+            agent_did: Optional agent DID for contextual logging
+            
+        Returns:
+            Enforcement result with original and capped values
+        """
+        if value_type not in self.ceilings:
+            raise ValueError(f"Unknown value type: {value_type}")
+        
+        ceiling = self.ceilings[value_type]
+        original_value = value
+        capped = False
+        
+        # Apply ceiling if needed
+        if value > ceiling:
+            value = ceiling
+            capped = True
+            
+            # Log ceiling enforcement
+            context = f"agent:{agent_did}" if agent_did else "system"
+            note = f"Ceiling enforced on {value_type} for {context}: {original_value} → {value}"
+            
+            self.log_event("ceiling_enforcement", note, {
+                "value_type": value_type,
+                "original_value": original_value,
+                "capped_value": value,
+                "ceiling": ceiling,
+                "agent_did": agent_did
+            })
+        
+        return {
+            "value_type": value_type,
+            "original_value": original_value,
+            "final_value": value,
+            "ceiling": ceiling,
+            "capped": capped
+        }
+    
+    def update_ceiling(self, value_type: str, ceiling: Union[int, float]) -> Dict[str, Any]:
+        """
+        Update a ceiling value
+        
+        Args:
+            value_type: Type of ceiling to update
+            ceiling: New ceiling value
+            
+        Returns:
+            Update result with old and new ceiling values
+        """
+        if value_type not in self.ceilings:
+            raise ValueError(f"Unknown value type: {value_type}")
+        
+        old_ceiling = self.ceilings[value_type]
+        self.ceilings[value_type] = ceiling
+        
+        # Log ceiling update
+        note = f"Ceiling updated for {value_type}: {old_ceiling} → {ceiling}"
+        
+        self.log_event("ceiling_update", note, {
+            "value_type": value_type,
+            "old_ceiling": old_ceiling,
+            "new_ceiling": ceiling
+        })
+        
+        return {
+            "value_type": value_type,
+            "old_ceiling": old_ceiling,
+            "new_ceiling": ceiling
+        }
+    
+    def generate_audit_scroll(self, output_file: Optional[str] = None, 
+                            event_types: Optional[List[str]] = None,
+                            limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Generate an audit scroll (list of audit events) with optional filtering
+        
+        Args:
+            output_file: Optional file to write the audit scroll to
+            event_types: Optional list of event types to filter by
+            limit: Maximum number of events to include
+            
+        Returns:
+            List of audit events
+        """
+        # Read ledger file
+        events = []
+        try:
+            with open(self.ledger_file, "r") as f:
+                for line in f:
+                    try:
+                        event = json.loads(line.strip())
+                        # Apply event type filter if specified
+                        if event_types and event["event"] not in event_types:
+                            continue
+                        events.append(event)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON in ledger: {line}")
+        except FileNotFoundError:
+            logger.warning("Ledger file not found")
+        
+        # Sort by timestamp
+        events.sort(key=lambda x: x["ts"], reverse=True)
+        
+        # Apply limit
+        events = events[:limit]
+        
+        # Write to output file if specified
+        if output_file:
+            output_path = Path(output_file)
+            with open(output_path, "w") as f:
+                f.write("===== EPOCH5 AUDIT SCROLL =====\n")
+                f.write(f"Generated at: {self._get_iso_timestamp()}\n")
+                f.write(f"Events: {len(events)}\n")
+                f.write("==============================\n\n")
+                
+                for event in events:
+                    f.write(f"[{event['ts']}] {event['event']}: {event['note']}\n")
+                    if "data" in event:
+                        f.write(f"  Data: {json.dumps(event['data'], indent=2)}\n")
+                    f.write(f"  Seal: {event['seal']}\n")
+                    f.write("\n")
+                
+                # Generate scroll seal
+                scroll_payload = f"scroll_{self._get_iso_timestamp()}_{len(events)}"
+                scroll_seal = self._generate_hash(scroll_payload)
+                
+                f.write("==============================\n")
+                f.write(f"Scroll Seal: {scroll_seal}\n")
+        
+        return events
+    
+    def verify_seals(self, max_events: int = 100) -> Dict[str, Any]:
+        """
+        Verify the integrity of recent audit events by checking their seals
+        
+        Args:
+            max_events: Maximum number of events to check
+            
+        Returns:
+            Verification results
+        """
+        events = []
+        valid_count = 0
+        invalid_count = 0
+        invalid_events = []
+        
+        try:
+            # Read the most recent events
+            with open(self.ledger_file, "r") as f:
+                for line in f:
+                    try:
+                        event = json.loads(line.strip())
+                        events.append(event)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON in ledger: {line}")
+            
+            # Sort by timestamp and apply limit
+            events.sort(key=lambda x: x["ts"], reverse=True)
+            events = events[:max_events]
+            
+            # Verify each event's seal
+            for event in events:
+                # Reconstruct seal payload
+                seal_payload = f"{event['ts']}|{event['event']}|{event['note']}|{event['epoch']}"
+                if "data" in event:
+                    seal_payload += f"|{json.dumps(event['data'], sort_keys=True)}"
+                
+                # Generate expected seal
+                expected_seal = self._generate_hash(seal_payload)
+                
+                # Compare with recorded seal
+                if expected_seal == event["seal"]:
+                    valid_count += 1
+                else:
+                    invalid_count += 1
+                    invalid_events.append({
+                        "ts": event["ts"],
+                        "event": event["event"],
+                        "recorded_seal": event["seal"],
+                        "expected_seal": expected_seal
+                    })
+            
+            # Log verification results
+            verification_status = "PASSED" if invalid_count == 0 else "FAILED"
+            note = f"Seal verification {verification_status}: {valid_count} valid, {invalid_count} invalid"
+            
+            self.log_event("seal_verification", note, {
+                "verified_count": valid_count + invalid_count,
+                "valid_count": valid_count,
+                "invalid_count": invalid_count,
+                "verification_status": verification_status
+            })
+            
+            return {
+                "status": verification_status,
+                "verified_count": valid_count + invalid_count,
+                "valid_count": valid_count,
+                "invalid_count": invalid_count,
+                "invalid_events": invalid_events
+            }
+            
+        except FileNotFoundError:
+            logger.warning("Ledger file not found")
+            return {
+                "status": "ERROR",
+                "error": "Ledger file not found"
+            }
+
+
+# CLI interface
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="EPOCH5 Audit System")
+    parser.add_argument("--base-dir", default="./archive/EPOCH5", help="Base directory for EPOCH5 systems")
+    
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    
+    # Log event command
+    log_parser = subparsers.add_parser("log", help="Log an event")
+    log_parser.add_argument("event_type", help="Type of event")
+    log_parser.add_argument("note", help="Event note/description")
+    log_parser.add_argument("--data", help="Additional data (JSON)")
+    
+    # Enforce ceiling command
+    enforce_parser = subparsers.add_parser("enforce", help="Enforce ceiling on a value")
+    enforce_parser.add_argument("value_type", help="Type of value to check")
+    enforce_parser.add_argument("value", type=float, help="Value to check")
+    enforce_parser.add_argument("--agent", help="Agent DID")
+    
+    # Update ceiling command
+    update_parser = subparsers.add_parser("update-ceiling", help="Update a ceiling value")
+    update_parser.add_argument("value_type", help="Type of ceiling to update")
+    update_parser.add_argument("ceiling", type=float, help="New ceiling value")
+    
+    # Generate audit scroll command
+    scroll_parser = subparsers.add_parser("scroll", help="Generate audit scroll")
+    scroll_parser.add_argument("--output", help="Output file")
+    scroll_parser.add_argument("--event-types", help="Event types to include (comma-separated)")
+    scroll_parser.add_argument("--limit", type=int, default=100, help="Maximum number of events")
+    
+    # Verify seals command
+    verify_parser = subparsers.add_parser("verify", help="Verify audit seals")
+    verify_parser.add_argument("--max-events", type=int, default=100, help="Maximum number of events to check")
+    
+    args = parser.parse_args()
+    
+    # Create audit system
+    audit = EpochAudit(base_dir=args.base_dir)
+    
+    try:
+        if args.command == "log":
+            # Parse data if provided
+            data = None
+            if args.data:
+                try:
+                    data = json.loads(args.data)
+                except json.JSONDecodeError:
+                    print("Error: Data must be valid JSON")
+                    exit(1)
+            
+            # Log event
+            event = audit.log_event(args.event_type, args.note, data)
+            print(f"Event logged with seal: {event['seal']}")
+            
+        elif args.command == "enforce":
+            # Enforce ceiling
+            result = audit.enforce_ceiling(args.value_type, args.value, args.agent)
+            
+            if result["capped"]:
+                print(f"Ceiling enforced: {result['original_value']} → {result['final_value']}")
+            else:
+                print(f"Value {result['original_value']} is within ceiling ({result['ceiling']})")
+            
+        elif args.command == "update-ceiling":
+            # Update ceiling
+            result = audit.update_ceiling(args.value_type, args.ceiling)
+            print(f"Ceiling updated: {result['old_ceiling']} → {result['new_ceiling']}")
+            
+        elif args.command == "scroll":
+            # Parse event types if provided
+            event_types = None
+            if args.event_types:
+                event_types = [t.strip() for t in args.event_types.split(",")]
+            
+            # Generate audit scroll
+            events = audit.generate_audit_scroll(args.output, event_types, args.limit)
+            
+            if args.output:
+                print(f"Audit scroll written to {args.output}")
+            else:
+                print("===== EPOCH5 AUDIT SCROLL =====")
+                for event in events:
+                    print(f"[{event['ts']}] {event['event']}: {event['note']}")
+                
+        elif args.command == "verify":
+            # Verify seals
+            result = audit.verify_seals(args.max_events)
+            
+            print(f"Verification status: {result['status']}")
+            print(f"Verified {result['verified_count']} events")
+            print(f"Valid: {result['valid_count']}, Invalid: {result['invalid_count']}")
+            
+            if result["invalid_count"] > 0:
+                print("\nInvalid events:")
+                for event in result["invalid_events"]:
+                    print(f"  [{event['ts']}] {event['event']}")
+                    print(f"    Recorded: {event['recorded_seal']}")
+                    print(f"    Expected: {event['expected_seal']}")
+            
+        else:
+            parser.print_help()
+            
+    except Exception as e:
+        print(f"Error: {str(e)}")

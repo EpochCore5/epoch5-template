@@ -43,6 +43,8 @@ class CeilingDashboardHandler(BaseHTTPRequestHandler):
             self.serve_api_ceilings()
         elif path == "/api/performance":
             self.serve_api_performance()
+        elif path == "/api/security":
+            self.serve_api_security()
         else:
             self.send_error(404, "Endpoint not found")
 
@@ -120,6 +122,49 @@ class CeilingDashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(json.dumps(data, indent=2).encode())
+    
+    def serve_api_security(self):
+        """Serve security audit data as JSON"""
+        if not self.ceiling_manager or not hasattr(self.ceiling_manager, 'audit_system') or not self.ceiling_manager.audit_system:
+            self.send_json_response({"error": "Audit system not available"})
+            return
+
+        try:
+            # Get verification results
+            verification_results = self.ceiling_manager.audit_system.verify_seals(20)
+            
+            # Get recent ceiling enforcement events
+            events = self.ceiling_manager.audit_system.generate_audit_scroll(
+                event_types=["ceiling_enforcement", "ceiling_verification", "ceiling_update"],
+                limit=10
+            )
+            
+            # Get security alerts if available
+            security_alerts = []
+            try:
+                from ceiling_security_alert import CeilingSecurityAlert
+                alerter = CeilingSecurityAlert()
+                security_alerts = alerter.get_recent_alerts(5)
+            except ImportError:
+                pass
+            
+            security_data = {
+                "status": "success",
+                "verification": {
+                    "status": verification_results.get("status", "UNKNOWN"),
+                    "valid_count": verification_results.get("valid_count", 0),
+                    "invalid_count": verification_results.get("invalid_count", 0)
+                },
+                "recent_events": events,
+                "alerts": security_alerts,
+                "last_checked": datetime.now().isoformat()
+            }
+            
+            self.send_json_response(security_data)
+        except Exception as e:
+            self.send_json_response(
+                {"status": "error", "error": f"Failed to load security data: {str(e)}"}
+            )
 
     def generate_dashboard_html(self):
         """Generate the dashboard HTML"""
@@ -193,7 +238,7 @@ class CeilingDashboardHandler(BaseHTTPRequestHandler):
             font-size: 0.9em;
             color: #718096;
         }
-        .tiers-section, .performance-section {
+        .tiers-section, .performance-section, .security-section {
             margin-bottom: 30px;
         }
         .section-title {
@@ -326,6 +371,13 @@ class CeilingDashboardHandler(BaseHTTPRequestHandler):
                 <div class="loading">Loading performance data...</div>
             </div>
         </div>
+        
+        <div class="security-section">
+            <h2 class="section-title">🔒 Security & Audit</h2>
+            <div class="security-status" id="securityStatus">
+                <div class="loading">Loading security data...</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -357,7 +409,8 @@ class CeilingDashboardHandler(BaseHTTPRequestHandler):
             await Promise.all([
                 loadSystemMetrics(),
                 loadServiceTiers(),
-                loadPerformanceData()
+                loadPerformanceData(),
+                loadSecurityData()
             ]);
         }
         
@@ -501,6 +554,96 @@ class CeilingDashboardHandler(BaseHTTPRequestHandler):
             });
             
             document.getElementById('performanceChart').innerHTML = html;
+        }
+        
+        async function loadSecurityData() {
+            try {
+                const response = await fetch('/api/security');
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                displaySecurityData(data);
+            } catch (error) {
+                document.getElementById('securityStatus').innerHTML = 
+                    `<div class="error">Error loading security data: ${error.message}</div>`;
+            }
+        }
+        
+        function displaySecurityData(data) {
+            if (!data || !data.status) {
+                document.getElementById('securityStatus').innerHTML = 
+                    '<div class="loading">No security data available</div>';
+                return;
+            }
+            
+            const verification = data.verification || {};
+            const statusColor = verification.status === 'PASSED' ? '#4CAF50' : '#F44336';
+            
+            let html = `
+                <div style="padding: 15px; margin-bottom: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <h3>Security Verification Status</h3>
+                    <div style="display: flex; align-items: center; margin: 10px 0;">
+                        <div style="width: 20px; height: 20px; border-radius: 50%; background: ${statusColor}; margin-right: 10px;"></div>
+                        <strong style="font-size: 1.2em;">${verification.status || 'UNKNOWN'}</strong>
+                    </div>
+                    <div>
+                        <span>Valid events: ${verification.valid_count || 0}</span>
+                        <span style="margin-left: 15px;">Invalid events: ${verification.invalid_count || 0}</span>
+                    </div>
+                </div>`;
+                
+            // Show security alerts if available
+            const alerts = data.alerts || [];
+            if (alerts.length > 0) {
+                html += `<div style="padding: 15px; margin-bottom: 15px; background: #fff8f8; border-radius: 8px; border: 1px solid #ffcdd2;">
+                    <h3>🚨 Security Alerts</h3>`;
+                
+                alerts.forEach(alert => {
+                    const severityColors = {
+                        'low': '#2196F3',
+                        'medium': '#FF9800',
+                        'high': '#F44336',
+                        'critical': '#9C27B0'
+                    };
+                    const severityColor = severityColors[alert.severity] || '#757575';
+                    
+                    html += `
+                        <div style="padding: 10px; margin: 5px 0; background: #fff; border-radius: 4px; border-left: 3px solid ${severityColor};">
+                            <div style="display: flex; align-items: center;">
+                                <span style="font-weight: bold; color: ${severityColor}; margin-right: 8px;">${alert.severity.toUpperCase()}</span>
+                                <span>${alert.message}</span>
+                            </div>
+                            <small>Time: ${new Date(alert.timestamp).toLocaleString()}</small>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
+                
+            html += `<h3>Recent Security Events</h3>`;
+            
+            // Display recent events
+            const events = data.recent_events || [];
+            if (events.length === 0) {
+                html += '<div class="loading">No recent security events</div>';
+            } else {
+                events.slice(-5).forEach(event => {
+                    const timestamp = new Date(event.ts).toLocaleString();
+                    
+                    html += `
+                        <div style="padding: 10px; margin: 5px 0; background: #f7fafc; border-radius: 4px; border-left: 3px solid #4C51BF;">
+                            <strong>${event.event}</strong>: ${event.note}<br>
+                            <small>Time: ${timestamp}</small>
+                        </div>
+                    `;
+                });
+            }
+            
+            document.getElementById('securityStatus').innerHTML = html;
         }
     </script>
 </body>

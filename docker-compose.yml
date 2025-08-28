@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      - PYTHONPATH=/app
+      - EPOCH5_ENV=development
+      - LOG_LEVEL=DEBUG
+    command: python epoch5.sh
+    networks:
+      - epoch5_network
+
+  # Testing service for continuous test execution
+  test:
+    build:
+      context: .
+      target: testing
+    volumes:
+      - .:/app
+      - ./tests/data:/app/tests/data
+    environment:
+      - PYTHONPATH=/app
+      - EPOCH5_ENV=testing
+      - LOG_LEVEL=DEBUG
+    command: pytest -xvs
+    networks:
+      - epoch5_network
+    depends_on:
+      - app
+
+  # Documentation generation service
+  docs:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+    command: bash -c "pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints && sphinx-build -b html docs docs/_build/html"
+    networks:
+      - epoch5_network
+
+  # StrategyDECK specific service
+  strategydeck:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - ./archive:/app/archive
+    environment:
+      - PYTHONPATH=/app
+      - EPOCH5_ENV=development
+      - LOG_LEVEL=DEBUG
+      - STRATEGY_DECK_CONFIG=/app/strategydeck_config.json
+    command: python strategydeck_integration.py execute --goal "Docker test execution" --priority high
+    networks:
+      - epoch5_network
+    depends_on:
+      - app
+
+  # Continuous improvement monitoring service
+  improvement-monitor:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - ./archive:/app/archive
+    environment:
+      - PYTHONPATH=/app
+      - EPOCH5_ENV=development
+      - LOG_LEVEL=DEBUG
+      - IMPROVEMENT_CYCLE_INTERVAL=60
+    command: python strategydeck_integration.py improvement monitor
+    networks:
+      - epoch5_network
+    depends_on:
+      - strategydeck
+
+networks:
+  epoch5_network:
+    driver: bridge

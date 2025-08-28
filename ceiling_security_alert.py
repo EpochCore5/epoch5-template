@@ -1,0 +1,486 @@
+#!/usr/bin/env python3
+"""
+Ceiling Security Alerting System for EPOCH5
+Provides real-time alerting for ceiling violations and security incidents
+"""
+
+import os
+import sys
+import json
+import time
+import logging
+import threading
+import smtplib
+import ssl
+from email.message import EmailMessage
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Any, Callable
+
+try:
+    from ceiling_manager import CeilingManager, ServiceTier, CeilingType
+    from epoch_audit import EpochAudit
+    CEILING_SYSTEM_AVAILABLE = True
+except ImportError:
+    CEILING_SYSTEM_AVAILABLE = False
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
+logger = logging.getLogger("CeilingSecurityAlert")
+
+class AlertSeverity:
+    """Alert severity levels"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+class AlertChannel:
+    """Alert channel types"""
+    CONSOLE = "console"
+    EMAIL = "email"
+    WEBHOOK = "webhook"
+    LOG = "log"
+
+class CeilingSecurityAlert:
+    """
+    Security alerting system for ceiling violations and security incidents.
+    Monitors audit logs and ceiling events for suspicious activity.
+    """
+    
+    def __init__(self, base_dir: str = "./archive/EPOCH5"):
+        """Initialize the alerting system"""
+        if not CEILING_SYSTEM_AVAILABLE:
+            logger.error("Ceiling system not available - alerting disabled")
+            return
+            
+        self.base_dir = Path(base_dir)
+        self.alert_dir = self.base_dir / "alerts"
+        self.alert_dir.mkdir(parents=True, exist_ok=True)
+        self.alert_log = self.alert_dir / "security_alerts.log"
+        
+        # Initialize components
+        self.ceiling_manager = CeilingManager(base_dir)
+        self.audit_system = EpochAudit(base_dir)
+        
+        # Alert configuration
+        self.alert_config = {
+            "channels": {
+                AlertChannel.CONSOLE: True,
+                AlertChannel.LOG: True,
+                AlertChannel.EMAIL: False,
+                AlertChannel.WEBHOOK: False
+            },
+            "email": {
+                "server": os.environ.get("EPOCH5_SMTP_SERVER", ""),
+                "port": int(os.environ.get("EPOCH5_SMTP_PORT", "587")),
+                "username": os.environ.get("EPOCH5_SMTP_USER", ""),
+                "password": os.environ.get("EPOCH5_SMTP_PASSWORD", ""),
+                "from_addr": os.environ.get("EPOCH5_ALERT_FROM", ""),
+                "to_addr": os.environ.get("EPOCH5_ALERT_TO", "")
+            },
+            "webhook": {
+                "url": os.environ.get("EPOCH5_WEBHOOK_URL", ""),
+                "secret": os.environ.get("EPOCH5_WEBHOOK_SECRET", "")
+            },
+            "thresholds": {
+                "max_violations_per_hour": 5,
+                "max_invalid_seals_per_day": 3,
+                "max_performance_degradation": 0.3  # 30%
+            }
+        }
+        
+        # Track alert state
+        self.alert_state = {
+            "last_check": datetime.now(timezone.utc),
+            "recent_alerts": [],
+            "monitoring_active": False
+        }
+        
+        # Initialize monitor thread
+        self.monitor_thread = None
+        self.stop_event = threading.Event()
+        
+        logger.info("Ceiling Security Alert system initialized")
+    
+    def start_monitoring(self, interval_seconds: int = 300):
+        """Start background monitoring for security incidents"""
+        if not CEILING_SYSTEM_AVAILABLE:
+            logger.error("Cannot start monitoring - ceiling system not available")
+            return False
+            
+        if self.alert_state["monitoring_active"]:
+            logger.warning("Monitoring already active")
+            return False
+            
+        # Initialize and start monitor thread
+        self.stop_event.clear()
+        self.monitor_thread = threading.Thread(
+            target=self._monitor_loop,
+            args=(interval_seconds,),
+            daemon=True
+        )
+        self.monitor_thread.start()
+        
+        self.alert_state["monitoring_active"] = True
+        logger.info(f"Security monitoring started with {interval_seconds}s interval")
+        
+        # Send test alert
+        self.send_alert(
+            "Security monitoring activated",
+            AlertSeverity.LOW,
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "interval": interval_seconds,
+                "thresholds": self.alert_config["thresholds"]
+            }
+        )
+        
+        return True
+    
+    def stop_monitoring(self):
+        """Stop background monitoring"""
+        if not self.alert_state["monitoring_active"]:
+            return False
+            
+        self.stop_event.set()
+        if self.monitor_thread:
+            self.monitor_thread.join(timeout=5.0)
+            
+        self.alert_state["monitoring_active"] = False
+        logger.info("Security monitoring stopped")
+        return True
+    
+    def _monitor_loop(self, interval_seconds: int):
+        """Background monitoring loop"""
+        while not self.stop_event.is_set():
+            try:
+                # Check for security incidents
+                self._check_for_incidents()
+                
+                # Wait for next interval or until stopped
+                self.stop_event.wait(interval_seconds)
+            except Exception as e:
+                logger.error(f"Error in monitor loop: {str(e)}")
+                # Brief delay before retrying
+                time.sleep(5)
+    
+    def _check_for_incidents(self):
+        """Check for security incidents in audit logs and ceiling events"""
+        now = datetime.now(timezone.utc)
+        last_check = self.alert_state["last_check"]
+        self.alert_state["last_check"] = now
+        
+        # Check for ceiling violations
+        self._check_ceiling_violations(last_check)
+        
+        # Check for invalid audit seals
+        self._check_audit_seals()
+        
+        # Check for performance degradation
+        self._check_performance_degradation()
+    
+    def _check_ceiling_violations(self, since: datetime):
+        """Check for excessive ceiling violations"""
+        # Get recent enforcement events
+        events = self.audit_system.generate_audit_scroll(
+            event_types=["ceiling_enforcement"],
+            limit=100
+        )
+        
+        # Filter events since last check
+        recent_events = [
+            e for e in events 
+            if datetime.fromisoformat(e["ts"].replace("Z", "+00:00")) > since
+        ]
+        
+        # Group by config_id
+        violations_by_config = {}
+        for event in recent_events:
+            config_id = event.get("data", {}).get("agent_did") or event.get("data", {}).get("config_id")
+            if not config_id:
+                continue
+                
+            if config_id not in violations_by_config:
+                violations_by_config[config_id] = []
+                
+            violations_by_config[config_id].append(event)
+        
+        # Check for violations exceeding threshold
+        threshold = self.alert_config["thresholds"]["max_violations_per_hour"]
+        for config_id, violations in violations_by_config.items():
+            if len(violations) > threshold:
+                # Send alert for excessive violations
+                self.send_alert(
+                    f"Excessive ceiling violations detected for {config_id}",
+                    AlertSeverity.HIGH,
+                    {
+                        "config_id": config_id,
+                        "violation_count": len(violations),
+                        "threshold": threshold,
+                        "first_violation": violations[0]["ts"],
+                        "recent_violations": [v["note"] for v in violations[:5]]
+                    }
+                )
+    
+    def _check_audit_seals(self):
+        """Check for invalid audit seals"""
+        # Verify recent seals
+        verification_results = self.audit_system.verify_seals(50)
+        
+        # Check if any invalid seals
+        if verification_results["invalid_count"] > 0:
+            threshold = self.alert_config["thresholds"]["max_invalid_seals_per_day"]
+            if verification_results["invalid_count"] >= threshold:
+                self.send_alert(
+                    "CRITICAL: Audit seal verification failed - possible tampering",
+                    AlertSeverity.CRITICAL,
+                    {
+                        "verification_status": verification_results["status"],
+                        "invalid_count": verification_results["invalid_count"],
+                        "threshold": threshold,
+                        "invalid_events": verification_results["invalid_events"]
+                    }
+                )
+            else:
+                self.send_alert(
+                    "WARNING: Invalid audit seals detected",
+                    AlertSeverity.MEDIUM,
+                    {
+                        "verification_status": verification_results["status"],
+                        "invalid_count": verification_results["invalid_count"],
+                        "threshold": threshold
+                    }
+                )
+    
+    def _check_performance_degradation(self):
+        """Check for significant performance degradation"""
+        # Get all ceiling configurations
+        ceilings_data = self.ceiling_manager.load_ceilings()
+        
+        for config_id, config in ceilings_data.get("configurations", {}).items():
+            performance_score = config.get("performance_score", 1.0)
+            
+            # Check for degradation below threshold
+            threshold = 1.0 - self.alert_config["thresholds"]["max_performance_degradation"]
+            if performance_score < threshold:
+                self.send_alert(
+                    f"Performance degradation detected for {config_id}",
+                    AlertSeverity.MEDIUM,
+                    {
+                        "config_id": config_id,
+                        "performance_score": performance_score,
+                        "threshold": threshold,
+                        "service_tier": config["service_tier"],
+                        "last_adjustment": config.get("last_adjustment")
+                    }
+                )
+    
+    def send_alert(self, message: str, severity: str, details: Dict[str, Any]):
+        """Send security alert through configured channels"""
+        # Create alert record
+        alert = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message": message,
+            "severity": severity,
+            "details": details
+        }
+        
+        # Add to recent alerts
+        self.alert_state["recent_alerts"].append(alert)
+        if len(self.alert_state["recent_alerts"]) > 100:
+            self.alert_state["recent_alerts"] = self.alert_state["recent_alerts"][-100:]
+        
+        # Log to alert log file
+        if self.alert_config["channels"][AlertChannel.LOG]:
+            try:
+                with open(self.alert_log, "a") as f:
+                    f.write(f"{json.dumps(alert)}\n")
+            except Exception as e:
+                logger.error(f"Failed to write to alert log: {str(e)}")
+        
+        # Console output
+        if self.alert_config["channels"][AlertChannel.CONSOLE]:
+            severity_prefix = {
+                AlertSeverity.LOW: "ℹ️",
+                AlertSeverity.MEDIUM: "⚠️",
+                AlertSeverity.HIGH: "🚨",
+                AlertSeverity.CRITICAL: "🔥"
+            }.get(severity, "❗")
+            
+            logger.warning(f"{severity_prefix} SECURITY ALERT: {message}")
+            
+            if details:
+                logger.warning(f"Details: {json.dumps(details, indent=2)}")
+        
+        # Email alerts
+        if self.alert_config["channels"][AlertChannel.EMAIL]:
+            try:
+                self._send_email_alert(alert)
+            except Exception as e:
+                logger.error(f"Failed to send email alert: {str(e)}")
+        
+        # Webhook alerts
+        if self.alert_config["channels"][AlertChannel.WEBHOOK]:
+            try:
+                self._send_webhook_alert(alert)
+            except Exception as e:
+                logger.error(f"Failed to send webhook alert: {str(e)}")
+    
+    def _send_email_alert(self, alert: Dict[str, Any]):
+        """Send alert via email"""
+        config = self.alert_config["email"]
+        
+        # Skip if email not configured
+        if not all([config["server"], config["from_addr"], config["to_addr"]]):
+            return False
+            
+        # Create email message
+        msg = EmailMessage()
+        msg["Subject"] = f"EPOCH5 Security Alert: {alert['severity'].upper()} - {alert['message']}"
+        msg["From"] = config["from_addr"]
+        msg["To"] = config["to_addr"]
+        
+        # Format message body
+        body = f"""
+        EPOCH5 SECURITY ALERT
+        =====================
+        
+        Severity: {alert['severity'].upper()}
+        Time: {alert['timestamp']}
+        
+        {alert['message']}
+        
+        Details:
+        {json.dumps(alert['details'], indent=2)}
+        """
+        
+        msg.set_content(body)
+        
+        # Send email
+        context = ssl.create_default_context()
+        with smtplib.SMTP(config["server"], config["port"]) as server:
+            server.starttls(context=context)
+            if config["username"] and config["password"]:
+                server.login(config["username"], config["password"])
+            server.send_message(msg)
+            
+        return True
+    
+    def _send_webhook_alert(self, alert: Dict[str, Any]):
+        """Send alert via webhook"""
+        config = self.alert_config["webhook"]
+        
+        # Skip if webhook not configured
+        if not config["url"]:
+            return False
+            
+        # TODO: Implement webhook delivery
+        return False
+    
+    def get_recent_alerts(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent security alerts"""
+        return self.alert_state["recent_alerts"][-limit:]
+    
+    def check_now(self) -> Dict[str, Any]:
+        """Perform an immediate security check"""
+        if not CEILING_SYSTEM_AVAILABLE:
+            return {"error": "Ceiling system not available"}
+            
+        start_time = time.time()
+        previous_alerts = len(self.alert_state["recent_alerts"])
+        
+        # Run security checks
+        self._check_for_incidents()
+        
+        # Return results
+        return {
+            "check_time": datetime.now(timezone.utc).isoformat(),
+            "execution_time": time.time() - start_time,
+            "new_alerts": len(self.alert_state["recent_alerts"]) - previous_alerts,
+            "total_alerts": len(self.alert_state["recent_alerts"]),
+            "status": "completed"
+        }
+
+# CLI interface
+def main():
+    """Command line interface for ceiling security alerts"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="EPOCH5 Ceiling Security Alerts")
+    parser.add_argument("--base-dir", default="./archive/EPOCH5", help="Base directory")
+    
+    subparsers = parser.add_subparsers(dest="command", help="Command")
+    
+    # Start monitoring command
+    start_parser = subparsers.add_parser("start", help="Start security monitoring")
+    start_parser.add_argument("--interval", type=int, default=300, help="Check interval in seconds")
+    
+    # Stop monitoring command
+    subparsers.add_parser("stop", help="Stop security monitoring")
+    
+    # Check now command
+    subparsers.add_parser("check", help="Perform immediate security check")
+    
+    # List alerts command
+    list_parser = subparsers.add_parser("list", help="List recent alerts")
+    list_parser.add_argument("--limit", type=int, default=10, help="Maximum alerts to show")
+    
+    args = parser.parse_args()
+    
+    # Create alerting system
+    alerter = CeilingSecurityAlert(base_dir=args.base_dir)
+    
+    if args.command == "start":
+        success = alerter.start_monitoring(args.interval)
+        if success:
+            print(f"✓ Security monitoring started with {args.interval}s interval")
+            print("  Press Ctrl+C to exit (monitoring will continue in background)")
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\nExiting - monitoring continues in background")
+        else:
+            print("✗ Failed to start monitoring")
+            
+    elif args.command == "stop":
+        success = alerter.stop_monitoring()
+        if success:
+            print("✓ Security monitoring stopped")
+        else:
+            print("✗ Monitoring was not active")
+            
+    elif args.command == "check":
+        print("Running security check...")
+        result = alerter.check_now()
+        print(f"✓ Check completed in {result.get('execution_time', 0):.2f}s")
+        print(f"  New alerts: {result.get('new_alerts', 0)}")
+        print(f"  Total alerts: {result.get('total_alerts', 0)}")
+        
+    elif args.command == "list":
+        alerts = alerter.get_recent_alerts(args.limit)
+        if not alerts:
+            print("No recent security alerts")
+        else:
+            print(f"Recent Security Alerts ({len(alerts)}):")
+            for alert in alerts:
+                severity_marker = {
+                    AlertSeverity.LOW: "ℹ️",
+                    AlertSeverity.MEDIUM: "⚠️",
+                    AlertSeverity.HIGH: "🚨",
+                    AlertSeverity.CRITICAL: "🔥"
+                }.get(alert["severity"], "❗")
+                
+                timestamp = datetime.fromisoformat(alert["timestamp"].replace("Z", "+00:00"))
+                print(f"{severity_marker} [{timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {alert['message']}")
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

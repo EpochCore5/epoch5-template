@@ -1,0 +1,4 @@
+{"ts": "2025-08-28T09:58:54.525882+00:00", "event": "gbtepoch_init", "note": "Initialized GBTEpoch reference at 1756375134", "epoch": 1756375134, "seal": "b5dd37996bf56cbb06885b00d72f847e0b2998b70248d50b36183498cd6d29cc"}
+{"ts": "2025-08-28T09:58:54.526040+00:00", "event": "tamper_test", "note": "Tamper test event", "epoch": 1756375134, "seal": "4a96129fd885de76b6eafde28d2ba73a0bd0aa637efbb9b8612a81fbdc138449"}
+{"ts": "2023-01-01T00:00:00+00:00", "event": "tampered_event", "note": "This event has an invalid seal", "epoch": 1672531200, "seal": "invalid_seal_value"}
+{"ts": "2025-08-28T09:58:54.526260+00:00", "event": "seal_verification", "note": "Seal verification FAILED: 2 valid, 1 invalid", "epoch": 1756375134, "data": {"verified_count": 3, "valid_count": 2, "invalid_count": 1, "verification_status": "FAILED"}, "seal": "d4d960e2185fabf4ee09d2d475c1ece912283d4d89809c046902b3b60e8cde95"}

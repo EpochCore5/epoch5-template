@@ -1,0 +1,721 @@
+! import sys
+! import os
+! import traceback
+! import json
+! import time
+! from typing import Any, Callable, Optional, Dict, List, Union, TypeVar, Generic
+! from concurrent.futures import ThreadPoolExecutor, as_completed
+! import logging
+! from datetime import datetime
+! from pathlib import Path
+  
+  # Import ceiling and security components if available
+! try:
+!     from ceiling_manager import CeilingManager, ServiceTier, CeilingType
+!     from epoch_audit import EpochAudit
+!     CEILING_SYSTEM_AVAILABLE = True
+! except ImportError:
+!     CEILING_SYSTEM_AVAILABLE = False
+  
+  # Define generic type for task results
+! T = TypeVar('T')
+  
+! class StrategyDECKAgent:
+!     """
+!     AI Agent for automating strategic tasks in the StrategyDECK project.
+!     Extensible for future multi-agent support.
+      
+!     Features:
+!     - Robust logging with configurable output
+!     - Task execution with timeouts and retries
+!     - Concurrent task execution capabilities
+!     - Performance metrics tracking
+!     - Error recovery mechanisms
+!     """
+!     def __init__(self, 
+!                  name: str = "StrategyDECKAgent", 
+!                  log_dir: Optional[str] = None,
+!                  log_level: int = logging.INFO,
+!                  max_workers: int = 4,
+!                  service_tier: str = "professional",
+!                  config_id: Optional[str] = None) -> None:
+!         """
+!         Initialize the StrategyDECKAgent with advanced logging and execution capabilities.
+          
+!         Args:
+!             name: Unique name for this agent instance
+!             log_dir: Directory to store log files (None for console-only logging)
+!             log_level: Logging level (default: INFO)
+!             max_workers: Maximum number of concurrent task workers
+!             service_tier: Service tier for ceiling management (default: professional)
+!             config_id: Configuration ID for ceiling management (default: agent name)
+!         """
+!         self.name = name
+!         self.max_workers = max_workers
+!         self.executor = ThreadPoolExecutor(max_workers=max_workers)
+!         self.start_time = datetime.now()
+!         self.metrics = {
+!             "tasks_completed": 0,
+!             "tasks_failed": 0,
+!             "total_execution_time": 0.0,
+!             "avg_task_duration": 0.0
+!         }
+          
+          # Initialize ceiling management if available
+!         if CEILING_SYSTEM_AVAILABLE:
+!             self.ceiling_manager = CeilingManager()
+!             self.config_id = config_id or f"agent_{name.lower().replace(' ', '_')}"
+              
+              # Check if config exists, create if not
+!             ceilings_data = self.ceiling_manager.load_ceilings()
+!             if self.config_id not in ceilings_data.get("configurations", {}):
+                  # Create configuration with specified service tier
+!                 service_tier_enum = ServiceTier(service_tier)
+!                 config = self.ceiling_manager.create_ceiling_configuration(
+!                     self.config_id, service_tier_enum
+!                 )
+!                 self.ceiling_manager.add_configuration(config)
+              
+              # Initialize audit system if available
+!             self.audit_system = EpochAudit() if CEILING_SYSTEM_AVAILABLE else None
+!         else:
+!             self.ceiling_manager = None
+!             self.config_id = None
+!             self.audit_system = None
+          
+          # Set up logging
+!         self.logger = logging.getLogger(self.name)
+!         self.logger.setLevel(log_level)
+!         self.logger.handlers = []  # Remove any existing handlers
+          
+          # Console handler
+!         console_handler = logging.StreamHandler(sys.stdout)
+!         console_formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
+!         console_handler.setFormatter(console_formatter)
+!         self.logger.addHandler(console_handler)
+          
+          # File handler (if log_dir specified)
+!         if log_dir:
+!             log_path = Path(log_dir)
+!             log_path.mkdir(parents=True, exist_ok=True)
+!             log_file = log_path / f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+!             file_handler = logging.FileHandler(log_file)
+!             file_formatter = logging.Formatter('[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s')
+!             file_handler.setFormatter(file_formatter)
+!             self.logger.addHandler(file_handler)
+              
+!         self.logger.info(f"StrategyDECKAgent '{name}' initialized with {max_workers} workers")
+  
+!     def run_task(self, 
+!                 task_callable: Callable[..., T], 
+!                 *args, 
+!                 **kwargs) -> Optional[T]:
+!         """
+!         Run a strategic task with error handling, logging, and metrics tracking.
+          
+!         Args:
+!             task_callable: The function to execute
+!             *args, **kwargs: Arguments for the function
+!                 timeout: Optional timeout in seconds
+!                 retries: Optional number of retries (default: 0)
+!                 retry_delay: Optional delay between retries in seconds (default: 1.0)
+!                 priority: Optional task priority (1-10, default: 5)
+                  
+!         Returns:
+!             The result of the task, or None if an error occurred
+!         """
+!         task_name = getattr(task_callable, '__name__', str(task_callable))
+!         self.logger.info(f"Starting task: {task_name}")
+          
+          # Extract execution parameters from kwargs
+!         timeout = kwargs.pop('timeout', None)
+!         retries = kwargs.pop('retries', 0)
+!         retry_delay = kwargs.pop('retry_delay', 1.0)
+!         priority = kwargs.pop('priority', 5)
+          
+          # Apply ceiling enforcement if available
+!         if self.ceiling_manager and self.config_id:
+              # Enforce priority ceiling
+!             priority_result = self.ceiling_manager.enforce_value_ceiling(
+!                 self.config_id, CeilingType.TRUST_THRESHOLD, priority
+!             )
+!             if priority_result["capped"]:
+!                 self.logger.warning(
+!                     f"Task priority capped: {priority_result['original_value']} → {priority_result['final_value']}"
+!                 )
+!                 priority = priority_result["final_value"]
+                  
+              # Enforce timeout ceiling if specified
+!             if timeout:
+!                 timeout_result = self.ceiling_manager.enforce_value_ceiling(
+!                     self.config_id, CeilingType.LATENCY, timeout
+!                 )
+!                 if timeout_result["capped"]:
+!                     self.logger.warning(
+!                         f"Task timeout capped: {timeout_result['original_value']} → {timeout_result['final_value']}"
+!                     )
+!                     timeout = timeout_result["final_value"]
+              
+              # Log task execution with audit system
+!             if self.audit_system:
+!                 self.audit_system.log_event(
+!                     "task_execution",
+!                     f"Executing task {task_name} with priority {priority}",
+!                     {
+!                         "task_name": task_name,
+!                         "priority": priority,
+!                         "timeout": timeout,
+!                         "retries": retries,
+!                         "agent_name": self.name,
+!                         "config_id": self.config_id
+!                     }
+!                 )
+          
+!         start_time = time.time()
+!         attempt = 0
+!         last_error = None
+          
+!         while attempt <= retries:
+!             if attempt > 0:
+!                 self.logger.warning(f"Retrying task {task_name} (attempt {attempt+1}/{retries+1})")
+!                 time.sleep(retry_delay)
+                  
+!             attempt += 1
+!             try:
+                  # Execute the task with optional timeout
+!                 if timeout:
+!                     future = self.executor.submit(task_callable, *args, **kwargs)
+!                     result = future.result(timeout=timeout)
+!                 else:
+!                     result = task_callable(*args, **kwargs)
+                  
+                  # Record successful execution
+!                 duration = time.time() - start_time
+!                 self.metrics["tasks_completed"] += 1
+!                 self.metrics["total_execution_time"] += duration
+!                 if self.metrics["tasks_completed"] > 0:
+!                     self.metrics["avg_task_duration"] = (
+!                         self.metrics["total_execution_time"] / 
+!                         (self.metrics["tasks_completed"] + self.metrics["tasks_failed"])
+!                     )
+                  
+!                 self.logger.info(f"Task {task_name} completed successfully in {duration:.2f}s")
+                  
+                  # Log performance metrics with ceiling manager if available
+!                 if self.ceiling_manager and self.config_id:
+                      # Update performance metrics
+!                     performance_metrics = {
+!                         "success_rate": self.metrics["tasks_completed"] / 
+!                                        (self.metrics["tasks_completed"] + self.metrics["tasks_failed"]),
+!                         "actual_latency": duration,
+!                         "spent_budget": self.metrics["total_execution_time"]
+!                     }
+                      
+                      # Adjust ceilings based on performance
+!                     self.ceiling_manager.adjust_ceiling_for_performance(
+!                         self.config_id, performance_metrics
+!                     )
+                      
+                      # Log task completion with audit system
+!                     if self.audit_system:
+!                         self.audit_system.log_event(
+!                             "task_completed",
+!                             f"Task {task_name} completed in {duration:.2f}s",
+!                             {
+!                                 "task_name": task_name,
+!                                 "duration": duration,
+!                                 "agent_name": self.name,
+!                                 "config_id": self.config_id,
+!                                 "metrics": self.metrics
+!                             }
+!                         )
+                  
+!                 return result
+                  
+!             except Exception as e:
+!                 last_error = e
+!                 error_details = {
+!                     "error_type": type(e).__name__,
+!                     "error_message": str(e),
+!                     "traceback": traceback.format_exc()
+!                 }
+                  
+                  # Check if we should retry
+!                 if attempt <= retries:
+!                     self.logger.warning(
+!                         f"Error in task {task_name} (attempt {attempt}/{retries+1}): {str(e)}"
+!                     )
+!                 else:
+!                     self.metrics["tasks_failed"] += 1
+!                     self.logger.error(
+!                         f"Error in task {task_name} after {attempt} attempts: {str(e)}", 
+!                         exc_info=True
+!                     )
+                      
+                      # Log task failure with ceiling manager and audit system
+!                     if self.ceiling_manager and self.config_id:
+                          # Update performance metrics with failure
+!                         performance_metrics = {
+!                             "success_rate": self.metrics["tasks_completed"] / 
+!                                            (self.metrics["tasks_completed"] + self.metrics["tasks_failed"]),
+!                             "actual_latency": time.time() - start_time,
+!                             "spent_budget": self.metrics["total_execution_time"]
+!                         }
+                          
+                          # Adjust ceilings based on performance
+!                         self.ceiling_manager.adjust_ceiling_for_performance(
+!                             self.config_id, performance_metrics
+!                         )
+                          
+                          # Log task failure with audit system
+!                         if self.audit_system:
+!                             self.audit_system.log_event(
+!                                 "task_failed",
+!                                 f"Task {task_name} failed after {attempt} attempts: {str(e)}",
+!                                 {
+!                                     "task_name": task_name,
+!                                     "attempts": attempt,
+!                                     "error_type": type(e).__name__,
+!                                     "error_message": str(e),
+!                                     "agent_name": self.name,
+!                                     "config_id": self.config_id
+!                                 }
+!                             )
+                      
+                      # Store error details for potential recovery
+!                     self._save_error_context(task_name, error_details, args, kwargs)
+                      
+!         return None
+      
+!     def run_concurrent_tasks(self, 
+!                            tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+!         """
+!         Run multiple tasks concurrently and collect their results.
+          
+!         Args:
+!             tasks: List of task definitions, each containing:
+!                 - 'callable': Function to execute
+!                 - 'args': List of args (optional)
+!                 - 'kwargs': Dict of kwargs (optional)
+!                 - 'task_id': Unique task identifier (optional)
+                  
+!         Returns:
+!             Dictionary mapping task IDs to their results or errors
+!         """
+!         futures = {}
+!         results = {}
+          
+!         self.logger.info(f"Executing {len(tasks)} tasks concurrently")
+          
+!         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+              # Submit all tasks
+!             for i, task in enumerate(tasks):
+!                 task_id = task.get('task_id', f"task_{i}")
+!                 task_callable = task['callable']
+!                 task_args = task.get('args', [])
+!                 task_kwargs = task.get('kwargs', {})
+                  
+!                 self.logger.debug(f"Submitting task {task_id}")
+!                 future = executor.submit(self.run_task, task_callable, *task_args, **task_kwargs)
+!                 futures[future] = task_id
+              
+              # Collect results as they complete
+!             for future in as_completed(futures):
+!                 task_id = futures[future]
+!                 try:
+!                     result = future.result()
+!                     results[task_id] = {
+!                         'status': 'success',
+!                         'result': result
+!                     }
+!                 except Exception as e:
+!                     results[task_id] = {
+!                         'status': 'error',
+!                         'error': str(e),
+!                         'error_type': type(e).__name__
+!                     }
+          
+!         success_count = sum(1 for r in results.values() if r['status'] == 'success')
+!         self.logger.info(f"Completed {len(tasks)} concurrent tasks ({success_count} successful)")
+          
+!         return results
+          
+!     def _save_error_context(self, 
+!                           task_name: str, 
+!                           error_details: Dict[str, str],
+!                           args: tuple, 
+!                           kwargs: Dict[str, Any]) -> None:
+!         """Save error context for potential recovery"""
+!         try:
+!             error_log = {
+!                 "task_name": task_name,
+!                 "timestamp": datetime.now().isoformat(),
+!                 "error": error_details,
+!                 "recoverable": self._is_error_recoverable(error_details["error_type"]),
+!                 "context": {
+!                     "args_summary": str(args)[:100] + "..." if len(str(args)) > 100 else str(args),
+!                     "kwargs_keys": list(kwargs.keys())
+!                 }
+!             }
+!             self.logger.debug(f"Error context saved: {json.dumps(error_log)}")
+!         except Exception as e:
+!             self.logger.error(f"Failed to save error context: {str(e)}")
+      
+!     def _is_error_recoverable(self, error_type: str) -> bool:
+!         """Determine if an error type is potentially recoverable"""
+          # List of typically recoverable errors
+!         recoverable_errors = [
+!             "TimeoutError", "ConnectionError", "RequestError", 
+!             "TemporaryFailure", "ResourceUnavailable"
+!         ]
+!         return any(err in error_type for err in recoverable_errors)
+  
+      # Example strategic task
+!     def automate_strategy(self, strategy_data: Dict[str, Any]) -> Dict[str, Any]:
+!         """
+!         Automate a strategic process using provided data with enhanced validation and execution.
+          
+!         Args:
+!             strategy_data: Dictionary containing strategy parameters:
+!                 - 'goal': The primary objective (required)
+!                 - 'priority': Priority level (high, medium, low)
+!                 - 'constraints': List of constraints to consider
+!                 - 'resources': Available resources for execution
+                  
+!         Returns:
+!             A dictionary containing the processed strategy results and metadata
+!         """
+          # Input validation with detailed error reporting
+!         if not isinstance(strategy_data, dict):
+!             error_msg = f"strategy_data must be a dictionary, got {type(strategy_data).__name__}"
+!             self.logger.error(error_msg)
+!             raise ValueError(error_msg)
+          
+          # Required field validation
+!         required_fields = ['goal']
+!         for field in required_fields:
+!             if field not in strategy_data:
+!                 error_msg = f"Required field '{field}' missing from strategy_data"
+!                 self.logger.error(error_msg)
+!                 raise ValueError(error_msg)
+          
+          # Normalize and validate priority if provided
+!         if 'priority' in strategy_data:
+!             valid_priorities = ['high', 'medium', 'low']
+!             priority = str(strategy_data['priority']).lower()
+!             if priority not in valid_priorities:
+!                 self.logger.warning(
+!                     f"Invalid priority '{strategy_data['priority']}', defaulting to 'medium'"
+!                 )
+!                 strategy_data['priority'] = 'medium'
+!             else:
+!                 strategy_data['priority'] = priority
+          
+          # Log execution with sanitized data (avoid logging sensitive information)
+!         log_safe_data = strategy_data.copy()
+!         if 'credentials' in log_safe_data:
+!             log_safe_data['credentials'] = "****REDACTED****"
+!         self.logger.info(f"Automating strategy with data: {log_safe_data}")
+          
+          # Strategy execution (placeholder for actual implementation)
+!         execution_start = time.time()
+          
+          # Simulate processing with different outcomes based on priority
+!         if strategy_data.get('priority') == 'high':
+!             time.sleep(0.5)  # Simulated high-priority fast processing
+!         else:
+!             time.sleep(1.0)  # Simulated normal processing time
+              
+          # Process strategy steps
+!         steps_completed = []
+!         constraints_applied = []
+          
+          # Process goal
+!         steps_completed.append(f"Processed goal: {strategy_data['goal']}")
+          
+          # Apply constraints if provided
+!         if 'constraints' in strategy_data and isinstance(strategy_data['constraints'], list):
+!             for constraint in strategy_data['constraints']:
+!                 steps_completed.append(f"Applied constraint: {constraint}")
+!                 constraints_applied.append(constraint)
+                  
+          # Allocate resources if provided
+!         if 'resources' in strategy_data and isinstance(strategy_data['resources'], dict):
+!             for resource, amount in strategy_data['resources'].items():
+!                 steps_completed.append(f"Allocated {amount} units of {resource}")
+          
+          # Calculate execution metrics
+!         execution_time = time.time() - execution_start
+          
+          # Prepare detailed result with metadata
+!         result = {
+!             'status': 'success',
+!             'goal_processed': strategy_data['goal'],
+!             'steps_completed': steps_completed,
+!             'constraints_applied': constraints_applied,
+!             'priority': strategy_data.get('priority', 'medium'),
+!             'execution_time': execution_time,
+!             'timestamp': datetime.now().isoformat(),
+!             'agent': self.name
+!         }
+          
+!         self.logger.info(f"Strategy automation completed in {execution_time:.2f}s")
+!         self.logger.debug(f"Strategy result details: {json.dumps(result)}")
+          
+!         return result
+      
+!     def get_ceiling_status(self) -> Dict[str, Any]:
+!         """
+!         Get the current status of ceiling configurations for this agent.
+          
+!         Returns:
+!             Dict with ceiling configuration details, or error if ceiling management is not available
+!         """
+!         if not self.ceiling_manager or not self.config_id:
+!             return {"error": "Ceiling management not available for this agent"}
+          
+!         try:
+              # Get ceiling configurations
+!             ceilings_data = self.ceiling_manager.load_ceilings()
+!             if self.config_id not in ceilings_data.get("configurations", {}):
+!                 return {"error": f"No ceiling configuration found for {self.config_id}"}
+                  
+!             config = ceilings_data["configurations"][self.config_id]
+              
+              # Get effective ceiling values
+!             effective_ceilings = {
+!                 ceiling_type.name: self.ceiling_manager.get_effective_ceiling(
+!                     self.config_id, ceiling_type
+!                 )
+!                 for ceiling_type in CeilingType
+!             }
+              
+              # Get upgrade recommendations
+!             upgrade_rec = self.ceiling_manager.get_upgrade_recommendations(self.config_id)
+              
+!             return {
+!                 "config_id": self.config_id,
+!                 "service_tier": config["service_tier"],
+!                 "performance_score": config.get("performance_score", 1.0),
+!                 "effective_ceilings": effective_ceilings,
+!                 "upgrade_recommended": upgrade_rec.get("should_upgrade", False),
+!                 "recommended_tier": upgrade_rec.get("recommended_tier"),
+!                 "last_adjustment": config.get("last_adjustment")
+!             }
+!         except Exception as e:
+!             self.logger.error(f"Error getting ceiling status: {str(e)}")
+!             return {"error": f"Failed to get ceiling status: {str(e)}"}
+      
+!     def verify_security(self) -> Dict[str, Any]:
+!         """
+!         Verify the security of audit logs and ceiling enforcements.
+          
+!         Returns:
+!             Dict with verification results, or error if security verification is not available
+!         """
+!         if not self.audit_system:
+!             return {"error": "Security audit system not available for this agent"}
+          
+!         try:
+!             verification_results = self.audit_system.verify_seals(20)
+              
+              # Add agent-specific context
+!             verification_results["agent_name"] = self.name
+!             verification_results["config_id"] = self.config_id
+!             verification_results["verification_time"] = datetime.now().isoformat()
+              
+              # Log verification event
+!             self.audit_system.log_event(
+!                 "security_verification",
+!                 f"Agent {self.name} performed security verification",
+!                 verification_results
+!             )
+              
+!             return verification_results
+!         except Exception as e:
+!             self.logger.error(f"Error verifying security: {str(e)}")
+!             return {"error": f"Failed to verify security: {str(e)}"}
+          
+!     def health_check(self) -> Dict[str, Any]:
+!         """
+!         Perform a health check on the agent and return status information.
+          
+!         Returns:
+!             Dict with agent health status
+!         """
+!         uptime = (datetime.now() - self.start_time).total_seconds()
+          
+!         status = {
+!             "agent_name": self.name,
+!             "status": "healthy",
+!             "uptime_seconds": uptime,
+!             "tasks_completed": self.metrics["tasks_completed"],
+!             "tasks_failed": self.metrics["tasks_failed"],
+!             "avg_task_duration": self.metrics["avg_task_duration"],
+!             "max_workers": self.max_workers,
+!             "active_workers": len([f for f in self.executor._threads if f.is_alive()]),
+!             "timestamp": datetime.now().isoformat()
+!         }
+          
+          # Add ceiling status if available
+!         if self.ceiling_manager and self.config_id:
+!             status["ceiling_status"] = self.get_ceiling_status()
+              
+              # Check if ceiling system is healthy
+!             if "error" in status["ceiling_status"]:
+!                 status["status"] = "degraded"
+!                 status["warning"] = "Ceiling management system not fully operational"
+          
+          # Add security verification if available
+!         if self.audit_system:
+!             security_status = self.verify_security()
+              
+              # Only include summary of security status
+!             if "error" not in security_status:
+!                 status["security"] = {
+!                     "status": security_status.get("status", "UNKNOWN"),
+!                     "valid_seals": security_status.get("valid_count", 0),
+!                     "invalid_seals": security_status.get("invalid_count", 0)
+!                 }
+                  
+                  # Mark degraded if any invalid seals
+!                 if security_status.get("invalid_count", 0) > 0:
+!                     status["status"] = "degraded"
+!                     status["warning"] = "Security verification failed - possible tampering"
+          
+!         return status
+      
+!     def shutdown(self, wait: bool = True) -> None:
+!         """
+!         Gracefully shut down the agent, completing any pending tasks.
+          
+!         Args:
+!             wait: If True, wait for pending tasks to complete
+!         """
+!         self.logger.info(f"Shutting down agent {self.name}" + 
+!                          (" (waiting for tasks to complete)" if wait else ""))
+!         self.executor.shutdown(wait=wait)
+!         self.logger.info(f"Agent {self.name} shutdown complete")
+          
+          # Log final metrics
+!         self.logger.info(f"Final metrics: Completed {self.metrics['tasks_completed']} tasks, " +
+!                          f"Failed {self.metrics['tasks_failed']} tasks, " +
+!                          f"Avg duration: {self.metrics['avg_task_duration']:.2f}s")
+  
+  # Example usage and CLI interface
+- if __name__ == "__main__":
+-     import argparse
+      
+      # Set up command line interface
+-     parser = argparse.ArgumentParser(description="StrategyDECK Agent")
+-     subparsers = parser.add_subparsers(dest="command", help="Available commands")
+      
+      # Run strategy command
+-     run_parser = subparsers.add_parser("run", help="Run a strategy")
+-     run_parser.add_argument("--goal", required=True, help="Strategy goal")
+-     run_parser.add_argument("--priority", choices=["high", "medium", "low"], default="medium", 
+!                           help="Priority level")
+-     run_parser.add_argument("--constraints", nargs="+", help="Strategy constraints")
+-     run_parser.add_argument("--resource", action="append", nargs=2, metavar=("NAME", "AMOUNT"),
+!                           help="Resource allocation (can be repeated)")
+      
+      # Status command
+-     status_parser = subparsers.add_parser("status", help="Check agent status")
+      
+      # Parse arguments
+-     args = parser.parse_args()
+      
+      # Create agent with file logging
+-     log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+-     agent = StrategyDECKAgent(log_dir=log_dir)
+      
+-     try:
+-         if args.command == "run":
+              # Build strategy data from arguments
+-             strategy_data = {
+!                 "goal": args.goal,
+!                 "priority": args.priority
+!             }
+              
+-             if args.constraints:
+-                 strategy_data["constraints"] = args.constraints
+                  
+-             if args.resource:
+-                 strategy_data["resources"] = {
+!                     name: float(amount) for name, amount in args.resource
+!                 }
+              
+              # Execute strategy with retry capability
+-             result = agent.run_task(
+!                 agent.automate_strategy, 
+!                 strategy_data,
+!                 retries=2,
+!                 timeout=10.0
+!             )
+              
+-             if result:
+-                 print(json.dumps(result, indent=2))
+>             else:
+-                 print("Strategy execution failed")
+-                 sys.exit(1)
+                  
+-         elif args.command == "status":
+              # Display agent health status
+-             health = agent.health_check()
+-             print(json.dumps(health, indent=2))
+              
+>         else:
+              # Demo multiple strategy execution
+-             print("Running demo with multiple strategies...")
+              
+              # Sequential execution
+-             test_data = {
+!                 "goal": "Optimize workflow",
+!                 "priority": "high",
+!                 "constraints": ["time-sensitive", "resource-efficient"],
+!                 "resources": {"compute": 10, "memory": 4}
+!             }
+-             result1 = agent.run_task(agent.automate_strategy, test_data)
+              
+              # Concurrent execution
+-             concurrent_tasks = [
+!                 {
+!                     "task_id": "strategy1",
+!                     "callable": agent.automate_strategy,
+!                     "args": [{
+!                         "goal": "Improve performance",
+!                         "priority": "medium",
+!                         "constraints": ["minimize-downtime"]
+!                     }]
+!                 },
+!                 {
+!                     "task_id": "strategy2", 
+!                     "callable": agent.automate_strategy,
+!                     "args": [{
+!                         "goal": "Reduce costs",
+!                         "priority": "low",
+!                         "resources": {"budget": 5000}
+!                     }]
+!                 }
+!             ]
+              
+-             results = agent.run_concurrent_tasks(concurrent_tasks)
+              
+              # Display results
+-             print("\nSequential Strategy Result:")
+-             print(json.dumps(result1, indent=2))
+              
+-             print("\nConcurrent Strategy Results:")
+-             print(json.dumps(results, indent=2))
+              
+-             print("\nAgent Health:")
+-             print(json.dumps(agent.health_check(), indent=2))
+      
+-     except KeyboardInterrupt:
+-         print("\nOperation interrupted by user")
+-     except Exception as e:
+-         print(f"Error: {str(e)}")
+-         traceback.print_exc()
+-     finally:
+          # Ensure clean shutdown
+-         agent.shutdown()

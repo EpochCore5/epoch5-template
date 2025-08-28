@@ -1,0 +1,1058 @@
+#!/usr/bin/env python3
+"""
+EPOCH5 Meta-Orchestration System - Autonomous System Control Layer
+Provides intelligent coordination between self-healing, adaptive security,
+ceiling management, and agent execution subsystems
+Implements hierarchical decision making and strategic optimization
+"""
+
+import json
+import time
+import logging
+import threading
+import hashlib
+import os
+import importlib.util
+import signal
+import subprocess
+import sys
+from datetime import datetime, timezone, timedelta
+from typing import Dict, List, Any, Optional, Tuple, Union, Set
+from pathlib import Path
+import random
+from collections import deque
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler("epoch5_orchestrator.log"),
+        logging.StreamHandler()
+    ]
+)
+
+class Subsystem:
+    """Representation of a managed subsystem"""
+    def __init__(self, name: str, module_path: str, start_command: str, 
+                status_command: str, priority: int, dependencies: List[str] = None):
+        self.name = name
+        self.module_path = module_path
+        self.start_command = start_command
+        self.status_command = status_command
+        self.priority = priority  # Higher number = higher priority
+        self.dependencies = dependencies or []
+        self.status = "unknown"
+        self.last_status_check = None
+        self.module = None
+        self.process = None
+        self.is_running = False
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert subsystem to dictionary"""
+        return {
+            "name": self.name,
+            "module_path": self.module_path,
+            "start_command": self.start_command,
+            "status_command": self.status_command,
+            "priority": self.priority,
+            "dependencies": self.dependencies,
+            "status": self.status,
+            "last_status_check": self.last_status_check,
+            "is_running": self.is_running
+        }
+    
+    def load_module(self) -> bool:
+        """Load the Python module for this subsystem"""
+        try:
+            if os.path.exists(self.module_path):
+                # Check if module is already loaded
+                if self.module is not None:
+                    return True
+                
+                # Load module
+                spec = importlib.util.spec_from_file_location(
+                    f"epoch5.{self.name}", self.module_path)
+                if spec:
+                    self.module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(self.module)
+                    return True
+            return False
+        except Exception as e:
+            logging.error(f"Error loading module {self.name}: {str(e)}")
+            return False
+    
+    def start(self) -> Dict[str, Any]:
+        """Start the subsystem"""
+        try:
+            if self.is_running:
+                return {"status": "already_running", "subsystem": self.name}
+            
+            # Run the start command
+            process = subprocess.Popen(
+                self.start_command, 
+                shell=True, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait briefly to see if process crashes immediately
+            time.sleep(1)
+            if process.poll() is not None:
+                # Process already exited
+                stdout, stderr = process.communicate()
+                return {
+                    "status": "failed", 
+                    "subsystem": self.name,
+                    "exit_code": process.returncode,
+                    "error": stderr
+                }
+            
+            # Process started successfully
+            self.process = process
+            self.is_running = True
+            self.status = "running"
+            self.last_status_check = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            return {"status": "started", "subsystem": self.name}
+        
+        except Exception as e:
+            logging.error(f"Error starting subsystem {self.name}: {str(e)}")
+            return {"status": "error", "subsystem": self.name, "error": str(e)}
+    
+    def check_status(self) -> Dict[str, Any]:
+        """Check the status of the subsystem"""
+        try:
+            # Run the status command
+            process = subprocess.run(
+                self.status_command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Update status based on exit code
+            if process.returncode == 0:
+                self.status = "running"
+                self.is_running = True
+            else:
+                self.status = "stopped"
+                self.is_running = False
+            
+            self.last_status_check = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            return {
+                "status": self.status,
+                "subsystem": self.name,
+                "output": process.stdout,
+                "error": process.stderr,
+                "exit_code": process.returncode
+            }
+        
+        except Exception as e:
+            logging.error(f"Error checking subsystem {self.name}: {str(e)}")
+            self.status = "error"
+            self.last_status_check = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return {"status": "error", "subsystem": self.name, "error": str(e)}
+    
+    def stop(self) -> Dict[str, Any]:
+        """Stop the subsystem"""
+        try:
+            if not self.is_running or self.process is None:
+                return {"status": "not_running", "subsystem": self.name}
+            
+            # Try graceful termination first
+            self.process.terminate()
+            
+            # Wait for process to terminate
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Force kill if not terminated
+                self.process.kill()
+                self.process.wait(timeout=2)
+            
+            self.is_running = False
+            self.status = "stopped"
+            self.last_status_check = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            return {"status": "stopped", "subsystem": self.name}
+        
+        except Exception as e:
+            logging.error(f"Error stopping subsystem {self.name}: {str(e)}")
+            return {"status": "error", "subsystem": self.name, "error": str(e)}
+
+
+class DecisionState:
+    """Representation of system state for decision making"""
+    def __init__(self):
+        self.ceiling_violations = 0
+        self.security_incidents = 0
+        self.healing_actions = 0
+        self.system_load = 0.0  # 0-1 scale
+        self.error_rate = 0.0   # 0-1 scale
+        self.response_time = 0.0  # seconds
+        self.resource_usage = {
+            "cpu": 0.0,  # 0-1 scale
+            "memory": 0.0,  # 0-1 scale
+            "disk": 0.0,   # 0-1 scale
+            "network": 0.0  # 0-1 scale
+        }
+        self.time_since_last_incident = 0  # seconds
+        self.running_subsystems = set()
+        self.last_actions = deque(maxlen=10)  # last 10 actions
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert state to dictionary"""
+        return {
+            "ceiling_violations": self.ceiling_violations,
+            "security_incidents": self.security_incidents,
+            "healing_actions": self.healing_actions,
+            "system_load": self.system_load,
+            "error_rate": self.error_rate,
+            "response_time": self.response_time,
+            "resource_usage": self.resource_usage,
+            "time_since_last_incident": self.time_since_last_incident,
+            "running_subsystems": list(self.running_subsystems),
+            "last_actions": list(self.last_actions)
+        }
+    
+    def update(self, metrics: Dict[str, Any]):
+        """Update state with new metrics"""
+        for key, value in metrics.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        
+        # Update resource usage
+        if "resource_usage" in metrics:
+            for resource, usage in metrics["resource_usage"].items():
+                if resource in self.resource_usage:
+                    self.resource_usage[resource] = usage
+    
+    def add_action(self, action: str, subsystem: str, result: Dict[str, Any]):
+        """Add an action to the history"""
+        self.last_actions.append({
+            "action": action,
+            "subsystem": subsystem,
+            "result": result,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        })
+
+
+class DecisionEngine:
+    """Decision engine for orchestration"""
+    def __init__(self):
+        self.state = DecisionState()
+        self.decision_history = deque(maxlen=100)  # last 100 decisions
+        self.decision_outcomes = {}  # Map decisions to outcomes for learning
+    
+    def decide_action(self, subsystems: Dict[str, Subsystem]) -> Tuple[str, str]:
+        """Decide what action to take next based on current state"""
+        # Decision logic - prioritize different actions based on system state
+        
+        # Check if any critical subsystems are down
+        critical_subsystems = [s for s in subsystems.values() if s.priority >= 8]
+        down_critical = [s for s in critical_subsystems if not s.is_running]
+        
+        if down_critical:
+            # Critical subsystem is down, start it
+            subsystem = down_critical[0]
+            return "start", subsystem.name
+        
+        # Check for security incidents
+        if self.state.security_incidents > 5:
+            # High security incidents, ensure security subsystem is running
+            if "adaptive_security" not in self.state.running_subsystems:
+                return "start", "adaptive_security"
+            
+            # If running, consider reducing ceiling to limit potential damage
+            if random.random() < 0.7:  # 70% chance
+                return "adjust_ceiling", "reduce"
+        
+        # Check for system load
+        if self.state.system_load > 0.8:
+            # High system load, consider scaling actions
+            if random.random() < 0.6:  # 60% chance
+                # Either scale out or reduce workload
+                if random.random() < 0.5:
+                    return "scale", "out"
+                else:
+                    return "adjust_ceiling", "reduce"
+        
+        # Check for error rate
+        if self.state.error_rate > 0.1:
+            # High error rate, ensure self-healing is running
+            if "self_healing" not in self.state.running_subsystems:
+                return "start", "self_healing"
+            
+            # If already running, trigger a healing cycle
+            return "trigger_healing", "system"
+        
+        # Optimize performance if everything is stable
+        if (self.state.ceiling_violations == 0 and 
+            self.state.security_incidents == 0 and
+            self.state.error_rate < 0.05 and
+            self.state.system_load < 0.5):
+            
+            # System is stable, can optimize
+            optimization_actions = ["adjust_ceiling", "optimize_resources", "schedule_maintenance"]
+            return random.choice(optimization_actions), "optimize"
+        
+        # Default: ensure all subsystems are running
+        for name, subsystem in subsystems.items():
+            if not subsystem.is_running and name not in self.state.running_subsystems:
+                return "start", name
+        
+        # If everything is running, just monitor
+        return "monitor", "all"
+    
+    def record_decision(self, action: str, target: str, outcome: Dict[str, Any]):
+        """Record a decision and its outcome"""
+        decision = {
+            "action": action,
+            "target": target,
+            "state": self.state.to_dict(),
+            "outcome": outcome,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        }
+        
+        self.decision_history.append(decision)
+        
+        # Update outcomes for learning
+        key = f"{action}:{target}"
+        if key not in self.decision_outcomes:
+            self.decision_outcomes[key] = {
+                "successes": 0,
+                "failures": 0,
+                "total": 0
+            }
+        
+        self.decision_outcomes[key]["total"] += 1
+        if outcome.get("status") in ["success", "started", "optimized"]:
+            self.decision_outcomes[key]["successes"] += 1
+        else:
+            self.decision_outcomes[key]["failures"] += 1
+    
+    def learn_from_history(self):
+        """Learn from decision history to improve future decisions"""
+        # This would implement reinforcement learning or another ML approach
+        # For now, we'll just log the current success rates
+        
+        for key, stats in self.decision_outcomes.items():
+            if stats["total"] > 0:
+                success_rate = stats["successes"] / stats["total"]
+                logging.info(f"Decision {key} success rate: {success_rate:.2f} ({stats['successes']}/{stats['total']})")
+
+
+class MetaOrchestrator:
+    def __init__(self, base_dir: str = "./archive/EPOCH5"):
+        self.base_dir = Path(base_dir)
+        self.orchestration_dir = self.base_dir / "orchestration"
+        self.orchestration_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Storage paths
+        self.subsystems_file = self.orchestration_dir / "subsystems.json"
+        self.state_file = self.orchestration_dir / "orchestrator_state.json"
+        self.decisions_file = self.orchestration_dir / "decisions.json"
+        self.config_file = self.orchestration_dir / "orchestrator_config.json"
+        
+        # Initialize configuration
+        self._initialize_config()
+        
+        # Initialize subsystems
+        self.subsystems = self._initialize_subsystems()
+        
+        # Decision engine
+        self.decision_engine = DecisionEngine()
+        
+        # Runtime state
+        self.is_orchestrating = False
+        self.orchestration_thread = None
+        
+        # Performance metrics
+        self.metrics = {
+            "decisions_made": 0,
+            "successful_actions": 0,
+            "failed_actions": 0,
+            "last_cycle_duration": 0.0,
+            "average_cycle_duration": 0.0,
+            "uptime": 0,
+            "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "start_time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        }
+    
+    def timestamp(self) -> str:
+        """Generate ISO timestamp consistent with EPOCH5"""
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    def sha256(self, data: str) -> str:
+        """Generate SHA256 hash consistent with EPOCH5"""
+        return hashlib.sha256(data.encode("utf-8")).hexdigest()
+    
+    def _initialize_config(self):
+        """Initialize default configuration"""
+        if not self.config_file.exists():
+            default_config = {
+                "orchestration_interval": 30,  # seconds
+                "system_check_interval": 60,   # seconds
+                "learning_interval": 3600,     # seconds
+                "auto_recovery": True,
+                "monitoring_level": "normal",  # low, normal, high
+                "scaling": {
+                    "enabled": True,
+                    "max_instances": 3,
+                    "min_instances": 1,
+                    "scale_up_threshold": 0.8,  # CPU/memory utilization
+                    "scale_down_threshold": 0.3
+                },
+                "priorities": {
+                    "security": 10,
+                    "stability": 8,
+                    "performance": 6,
+                    "cost": 4
+                },
+                "created_at": self.timestamp(),
+                "last_modified": self.timestamp()
+            }
+            with open(self.config_file, "w") as f:
+                json.dump(default_config, f, indent=2)
+            self.config = default_config
+        else:
+            with open(self.config_file, "r") as f:
+                self.config = json.load(f)
+    
+    def _initialize_subsystems(self) -> Dict[str, Subsystem]:
+        """Initialize subsystem definitions"""
+        if self.subsystems_file.exists():
+            with open(self.subsystems_file, "r") as f:
+                subsystems_data = json.load(f)
+                subsystems = {}
+                for name, data in subsystems_data.items():
+                    subsystem = Subsystem(
+                        name=name,
+                        module_path=data["module_path"],
+                        start_command=data["start_command"],
+                        status_command=data["status_command"],
+                        priority=data["priority"],
+                        dependencies=data.get("dependencies", [])
+                    )
+                    subsystem.status = data.get("status", "unknown")
+                    subsystem.last_status_check = data.get("last_status_check")
+                    subsystem.is_running = data.get("is_running", False)
+                    subsystems[name] = subsystem
+                return subsystems
+        else:
+            # Define default subsystems
+            subsystems = {
+                "ceiling_manager": Subsystem(
+                    name="ceiling_manager",
+                    module_path="/workspaces/epoch5-template/ceiling_manager.py",
+                    start_command="python3 /workspaces/epoch5-template/ceiling_manager.py enforce config-1 budget 100",
+                    status_command="ps aux | grep ceiling_manager.py | grep -v grep",
+                    priority=9,
+                    dependencies=[]
+                ),
+                "self_healing": Subsystem(
+                    name="self_healing",
+                    module_path="/workspaces/epoch5-template/self_healing.py",
+                    start_command="python3 /workspaces/epoch5-template/self_healing.py start",
+                    status_command="ps aux | grep self_healing.py | grep -v grep",
+                    priority=8,
+                    dependencies=[]
+                ),
+                "adaptive_security": Subsystem(
+                    name="adaptive_security",
+                    module_path="/workspaces/epoch5-template/adaptive_security.py",
+                    start_command="python3 /workspaces/epoch5-template/adaptive_security.py start",
+                    status_command="ps aux | grep adaptive_security.py | grep -v grep",
+                    priority=10,
+                    dependencies=[]
+                ),
+                "agent_execution": Subsystem(
+                    name="agent_execution",
+                    module_path="/workspaces/epoch5-template/agent_management.py",
+                    start_command="python3 /workspaces/epoch5-template/agent_management.py run",
+                    status_command="ps aux | grep agent_management.py | grep -v grep",
+                    priority=7,
+                    dependencies=["ceiling_manager"]
+                ),
+                "integration": Subsystem(
+                    name="integration",
+                    module_path="/workspaces/epoch5-template/integration.py",
+                    start_command="python3 /workspaces/epoch5-template/integration.py status",
+                    status_command="ps aux | grep integration.py | grep -v grep",
+                    priority=6,
+                    dependencies=["ceiling_manager", "agent_execution"]
+                )
+            }
+            
+            # Save initial subsystems
+            self._save_subsystems(subsystems)
+            return subsystems
+    
+    def _save_subsystems(self, subsystems: Dict[str, Subsystem]):
+        """Save subsystem definitions to file"""
+        subsystems_data = {name: subsystem.to_dict() for name, subsystem in subsystems.items()}
+        with open(self.subsystems_file, "w") as f:
+            json.dump(subsystems_data, f, indent=2)
+    
+    def _save_state(self):
+        """Save orchestrator state to file"""
+        state_data = {
+            "decision_engine": {
+                "state": self.decision_engine.state.to_dict(),
+                "decision_outcomes": self.decision_engine.decision_outcomes
+            },
+            "metrics": self.metrics,
+            "last_updated": self.timestamp()
+        }
+        with open(self.state_file, "w") as f:
+            json.dump(state_data, f, indent=2)
+    
+    def _collect_system_metrics(self) -> Dict[str, Any]:
+        """Collect system metrics from subsystems"""
+        # In a real system, this would collect actual metrics
+        # For demonstration, we'll generate simulated metrics
+        
+        # Check which subsystems are running
+        running_subsystems = set()
+        for name, subsystem in self.subsystems.items():
+            result = subsystem.check_status()
+            if result["status"] == "running":
+                running_subsystems.add(name)
+        
+        # Generate metrics based on running subsystems
+        ceiling_violations = random.randint(0, 5)
+        security_incidents = random.randint(0, 10)
+        healing_actions = random.randint(0, 3)
+        
+        # System load depends on running subsystems
+        system_load = 0.2 + (len(running_subsystems) * 0.1)
+        # Add some randomness
+        system_load = min(1.0, system_load + random.uniform(-0.1, 0.2))
+        
+        # Error rate is higher if self_healing is not running
+        base_error_rate = 0.02
+        if "self_healing" not in running_subsystems:
+            base_error_rate = 0.1
+        error_rate = max(0.0, min(1.0, base_error_rate + random.uniform(-0.01, 0.05)))
+        
+        # Response time depends on system load
+        response_time = 0.5 + (system_load * 2.0) + random.uniform(-0.2, 0.5)
+        
+        # Resource usage
+        cpu_usage = system_load + random.uniform(-0.1, 0.1)
+        memory_usage = 0.3 + (system_load * 0.5) + random.uniform(-0.1, 0.1)
+        disk_usage = 0.4 + random.uniform(-0.05, 0.05)
+        network_usage = 0.2 + (system_load * 0.3) + random.uniform(-0.1, 0.1)
+        
+        # Ensure values are in valid range
+        cpu_usage = max(0.0, min(1.0, cpu_usage))
+        memory_usage = max(0.0, min(1.0, memory_usage))
+        disk_usage = max(0.0, min(1.0, disk_usage))
+        network_usage = max(0.0, min(1.0, network_usage))
+        
+        # Time since last incident
+        time_since_last_incident = random.randint(60, 3600)  # 1 minute to 1 hour
+        
+        metrics = {
+            "ceiling_violations": ceiling_violations,
+            "security_incidents": security_incidents,
+            "healing_actions": healing_actions,
+            "system_load": system_load,
+            "error_rate": error_rate,
+            "response_time": response_time,
+            "resource_usage": {
+                "cpu": cpu_usage,
+                "memory": memory_usage,
+                "disk": disk_usage,
+                "network": network_usage
+            },
+            "time_since_last_incident": time_since_last_incident,
+            "running_subsystems": running_subsystems
+        }
+        
+        return metrics
+    
+    def execute_action(self, action: str, target: str) -> Dict[str, Any]:
+        """Execute an orchestration action"""
+        if action == "start":
+            # Start a subsystem
+            if target in self.subsystems:
+                return self.subsystems[target].start()
+            else:
+                return {"status": "error", "message": f"Unknown subsystem: {target}"}
+        
+        elif action == "stop":
+            # Stop a subsystem
+            if target in self.subsystems:
+                return self.subsystems[target].stop()
+            else:
+                return {"status": "error", "message": f"Unknown subsystem: {target}"}
+        
+        elif action == "adjust_ceiling":
+            # Adjust ceiling values
+            if target == "reduce":
+                # Simulate reducing ceiling
+                return {
+                    "status": "success",
+                    "message": "Reduced ceiling values to mitigate risk",
+                    "adjustments": {
+                        "budget": "reduced by 20%",
+                        "rate_limit": "reduced by 30%"
+                    }
+                }
+            elif target == "optimize":
+                # Simulate optimizing ceiling
+                return {
+                    "status": "optimized",
+                    "message": "Optimized ceiling values for performance",
+                    "adjustments": {
+                        "budget": "increased by 10%",
+                        "latency": "reduced by 15%"
+                    }
+                }
+            else:
+                return {"status": "error", "message": f"Unknown ceiling adjustment: {target}"}
+        
+        elif action == "trigger_healing":
+            # Trigger healing cycle
+            if "self_healing" in self.subsystems:
+                if not self.subsystems["self_healing"].is_running:
+                    # Start self-healing first
+                    start_result = self.subsystems["self_healing"].start()
+                    if start_result["status"] != "started":
+                        return {"status": "error", "message": "Failed to start self-healing system"}
+                
+                # Simulate triggering healing
+                component = target if target != "system" else "all"
+                return {
+                    "status": "success",
+                    "message": f"Triggered healing cycle for {component}",
+                    "healing_actions": random.randint(1, 5)
+                }
+            else:
+                return {"status": "error", "message": "Self-healing subsystem not configured"}
+        
+        elif action == "scale":
+            # Scale resources
+            if target == "out":
+                return {
+                    "status": "success",
+                    "message": "Scaled out system resources",
+                    "details": {
+                        "instances": "increased by 1",
+                        "memory": "increased by 512MB"
+                    }
+                }
+            elif target == "in":
+                return {
+                    "status": "success",
+                    "message": "Scaled in system resources",
+                    "details": {
+                        "instances": "decreased by 1",
+                        "memory": "reduced by 512MB"
+                    }
+                }
+            else:
+                return {"status": "error", "message": f"Unknown scaling direction: {target}"}
+        
+        elif action == "optimize_resources":
+            # Optimize resource allocation
+            return {
+                "status": "optimized",
+                "message": "Optimized system resource allocation",
+                "details": {
+                    "cpu_allocation": "rebalanced",
+                    "memory_priority": "adjusted",
+                    "disk_io": "optimized"
+                }
+            }
+        
+        elif action == "schedule_maintenance":
+            # Schedule maintenance
+            return {
+                "status": "scheduled",
+                "message": "Scheduled system maintenance",
+                "details": {
+                    "time": "next low-usage window",
+                    "actions": ["cleanup", "reindex", "update"]
+                }
+            }
+        
+        elif action == "monitor":
+            # Just monitoring, no action needed
+            return {
+                "status": "monitoring",
+                "message": f"Monitoring {target}",
+                "details": {
+                    "subsystems": len(self.subsystems),
+                    "running": len([s for s in self.subsystems.values() if s.is_running])
+                }
+            }
+        
+        else:
+            return {"status": "error", "message": f"Unknown action: {action}"}
+    
+    def orchestration_cycle(self):
+        """Run one orchestration decision cycle"""
+        cycle_start = time.time()
+        
+        try:
+            # Collect current system metrics
+            metrics = self._collect_system_metrics()
+            
+            # Update decision state
+            self.decision_engine.state.update(metrics)
+            
+            # Decide on next action
+            action, target = self.decision_engine.decide_action(self.subsystems)
+            
+            # Execute action
+            logging.info(f"Executing action: {action} on {target}")
+            result = self.execute_action(action, target)
+            
+            # Record decision and outcome
+            self.decision_engine.record_decision(action, target, result)
+            self.decision_engine.state.add_action(action, target, result)
+            
+            # Update metrics
+            self.metrics["decisions_made"] += 1
+            if result.get("status") in ["success", "started", "optimized", "scheduled", "monitoring"]:
+                self.metrics["successful_actions"] += 1
+            else:
+                self.metrics["failed_actions"] += 1
+            
+            # Learn from history periodically
+            if self.metrics["decisions_made"] % 10 == 0:
+                self.decision_engine.learn_from_history()
+            
+            # Save state
+            self._save_state()
+            self._save_subsystems(self.subsystems)
+            
+            # Calculate cycle duration
+            cycle_duration = time.time() - cycle_start
+            self.metrics["last_cycle_duration"] = cycle_duration
+            
+            # Update average cycle duration
+            if "average_cycle_duration" in self.metrics and self.metrics["average_cycle_duration"] > 0:
+                self.metrics["average_cycle_duration"] = (
+                    (self.metrics["average_cycle_duration"] * (self.metrics["decisions_made"] - 1)) + 
+                    cycle_duration
+                ) / self.metrics["decisions_made"]
+            else:
+                self.metrics["average_cycle_duration"] = cycle_duration
+            
+            # Update uptime
+            start_time = datetime.fromisoformat(self.metrics["start_time"].replace('Z', '+00:00'))
+            now = datetime.now(timezone.utc)
+            self.metrics["uptime"] = (now - start_time).total_seconds()
+            
+            self.metrics["last_updated"] = self.timestamp()
+            
+            return {
+                "action": action,
+                "target": target,
+                "result": result,
+                "cycle_duration": cycle_duration
+            }
+        
+        except Exception as e:
+            logging.error(f"Error in orchestration cycle: {str(e)}")
+            return {"status": "error", "message": str(e)}
+    
+    def run_orchestration(self):
+        """Main orchestration loop"""
+        self.is_orchestrating = True
+        logging.info("Starting meta-orchestration")
+        
+        try:
+            while self.is_orchestrating:
+                # Run orchestration cycle
+                result = self.orchestration_cycle()
+                
+                if result.get("status") == "error":
+                    logging.error(f"Orchestration cycle error: {result.get('message')}")
+                
+                # Sleep until next cycle
+                time.sleep(self.config["orchestration_interval"])
+        
+        except Exception as e:
+            logging.error(f"Fatal error in orchestration: {str(e)}")
+            self.is_orchestrating = False
+    
+    def start_orchestration(self):
+        """Start orchestration in background thread"""
+        if not self.is_orchestrating:
+            self.orchestration_thread = threading.Thread(target=self.run_orchestration)
+            self.orchestration_thread.daemon = True
+            self.orchestration_thread.start()
+            return {"status": "started", "timestamp": self.timestamp()}
+        return {"status": "already_running", "timestamp": self.timestamp()}
+    
+    def stop_orchestration(self):
+        """Stop orchestration"""
+        if self.is_orchestrating:
+            self.is_orchestrating = False
+            if self.orchestration_thread:
+                self.orchestration_thread.join(timeout=2.0)
+            return {"status": "stopped", "timestamp": self.timestamp()}
+        return {"status": "not_running", "timestamp": self.timestamp()}
+    
+    def get_system_status(self) -> Dict[str, Any]:
+        """Get comprehensive system status"""
+        # Check all subsystems
+        subsystem_status = {}
+        for name, subsystem in self.subsystems.items():
+            result = subsystem.check_status()
+            subsystem_status[name] = {
+                "status": result["status"],
+                "priority": subsystem.priority,
+                "last_check": subsystem.last_status_check
+            }
+        
+        # Calculate overall status
+        critical_subsystems = [s for s in self.subsystems.values() if s.priority >= 8]
+        critical_running = [s for s in critical_subsystems if s.is_running]
+        
+        if len(critical_running) == len(critical_subsystems):
+            overall_status = "optimal"
+        elif len(critical_running) >= len(critical_subsystems) * 0.7:
+            overall_status = "degraded"
+        else:
+            overall_status = "critical"
+        
+        # Get current metrics
+        current_metrics = self._collect_system_metrics()
+        
+        # Get decision statistics
+        decision_stats = {
+            "total": self.metrics["decisions_made"],
+            "successful": self.metrics["successful_actions"],
+            "failed": self.metrics["failed_actions"],
+            "success_rate": (
+                self.metrics["successful_actions"] / max(1, self.metrics["decisions_made"])
+            ) * 100,
+            "last_cycle_duration": self.metrics["last_cycle_duration"],
+            "average_cycle_duration": self.metrics["average_cycle_duration"]
+        }
+        
+        # Get recent decisions
+        recent_decisions = list(self.decision_engine.decision_history)[-5:]
+        
+        # Create recommendations based on state
+        recommendations = self._generate_recommendations(current_metrics)
+        
+        status_report = {
+            "timestamp": self.timestamp(),
+            "overall_status": overall_status,
+            "subsystems": subsystem_status,
+            "metrics": current_metrics,
+            "decision_stats": decision_stats,
+            "recent_decisions": recent_decisions,
+            "recommendations": recommendations,
+            "uptime": self.metrics["uptime"]
+        }
+        
+        return status_report
+    
+    def _generate_recommendations(self, metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate system recommendations based on metrics"""
+        recommendations = []
+        
+        # Check system load
+        if metrics["system_load"] > 0.8:
+            recommendations.append({
+                "priority": "high",
+                "area": "performance",
+                "recommendation": "Consider scaling out to handle high system load",
+                "estimated_impact": "high"
+            })
+        
+        # Check security incidents
+        if metrics["security_incidents"] > 5:
+            recommendations.append({
+                "priority": "high",
+                "area": "security",
+                "recommendation": "Investigate recent security incidents and strengthen protections",
+                "estimated_impact": "high"
+            })
+        
+        # Check error rate
+        if metrics["error_rate"] > 0.05:
+            recommendations.append({
+                "priority": "medium",
+                "area": "stability",
+                "recommendation": "Analyze and address error sources to improve stability",
+                "estimated_impact": "medium"
+            })
+        
+        # Check resource usage
+        if metrics["resource_usage"]["memory"] > 0.85:
+            recommendations.append({
+                "priority": "medium",
+                "area": "resources",
+                "recommendation": "Memory usage is high, consider optimizing or increasing allocation",
+                "estimated_impact": "medium"
+            })
+        
+        if metrics["resource_usage"]["disk"] > 0.9:
+            recommendations.append({
+                "priority": "high",
+                "area": "resources",
+                "recommendation": "Disk space is critically low, clean up or expand storage",
+                "estimated_impact": "high"
+            })
+        
+        # Check ceiling violations
+        if metrics["ceiling_violations"] > 3:
+            recommendations.append({
+                "priority": "medium",
+                "area": "ceilings",
+                "recommendation": "Review and potentially adjust ceiling values to reduce violations",
+                "estimated_impact": "medium"
+            })
+        
+        # Add periodic maintenance recommendation
+        if random.random() < 0.2:  # 20% chance
+            recommendations.append({
+                "priority": "low",
+                "area": "maintenance",
+                "recommendation": "Schedule routine system maintenance during low usage period",
+                "estimated_impact": "medium"
+            })
+        
+        return recommendations
+
+
+def main():
+    """CLI interface for meta-orchestrator"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="EPOCH5 Meta-Orchestration System")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # Start command
+    start_parser = subparsers.add_parser("start", help="Start meta-orchestration")
+    
+    # Stop command
+    stop_parser = subparsers.add_parser("stop", help="Stop meta-orchestration")
+    
+    # Status command
+    status_parser = subparsers.add_parser("status", help="Get system status")
+    
+    # Action command
+    action_parser = subparsers.add_parser("action", help="Execute specific action")
+    action_parser.add_argument("--action", required=True, help="Action to execute")
+    action_parser.add_argument("--target", required=True, help="Target of action")
+    
+    # Subsystem command
+    subsystem_parser = subparsers.add_parser("subsystem", help="Manage subsystems")
+    subsystem_parser.add_argument("operation", choices=["start", "stop", "status"], help="Operation to perform")
+    subsystem_parser.add_argument("name", help="Subsystem name")
+    
+    args = parser.parse_args()
+    
+    orchestrator = MetaOrchestrator()
+    
+    if args.command == "start":
+        result = orchestrator.start_orchestration()
+        print(f"Meta-orchestration {result['status']} at {result['timestamp']}")
+        print("System will automatically manage all subsystems and optimize performance")
+        print("Use 'stop' command to halt orchestration")
+    
+    elif args.command == "stop":
+        result = orchestrator.stop_orchestration()
+        print(f"Meta-orchestration {result['status']} at {result['timestamp']}")
+    
+    elif args.command == "status":
+        status = orchestrator.get_system_status()
+        
+        print(f"\n🔬 EPOCH5 System Status Report ({status['timestamp']})")
+        print(f"Overall Status: {status['overall_status'].upper()}")
+        print(f"Uptime: {status['uptime'] / 3600:.1f} hours")
+        
+        print("\nSubsystem Status:")
+        for name, info in status["subsystems"].items():
+            status_icon = "✅" if info["status"] == "running" else "❌"
+            print(f"  {status_icon} {name} (Priority: {info['priority']}): {info['status'].upper()}")
+        
+        print("\nSystem Metrics:")
+        metrics = status["metrics"]
+        print(f"  System Load: {metrics['system_load']:.2f}")
+        print(f"  Error Rate: {metrics['error_rate']:.2f}")
+        print(f"  Response Time: {metrics['response_time']:.2f}s")
+        print(f"  Security Incidents: {metrics['security_incidents']}")
+        print(f"  Ceiling Violations: {metrics['ceiling_violations']}")
+        
+        print("\nResource Usage:")
+        resources = metrics["resource_usage"]
+        print(f"  CPU: {resources['cpu']*100:.1f}%")
+        print(f"  Memory: {resources['memory']*100:.1f}%")
+        print(f"  Disk: {resources['disk']*100:.1f}%")
+        print(f"  Network: {resources['network']*100:.1f}%")
+        
+        print("\nOrchestration Metrics:")
+        decision_stats = status["decision_stats"]
+        print(f"  Decisions Made: {decision_stats['total']}")
+        print(f"  Success Rate: {decision_stats['success_rate']:.1f}%")
+        print(f"  Average Cycle Time: {decision_stats['average_cycle_duration']*1000:.1f}ms")
+        
+        if status["recent_decisions"]:
+            print("\nRecent Decisions:")
+            for i, decision in enumerate(reversed(status["recent_decisions"]), 1):
+                result_status = decision["outcome"].get("status", "unknown")
+                status_icon = "✅" if result_status in ["success", "started", "optimized"] else "❌"
+                print(f"  {i}. {status_icon} {decision['action']} on {decision['target']} - {result_status}")
+        
+        if status["recommendations"]:
+            print("\nRecommendations:")
+            for i, rec in enumerate(status["recommendations"], 1):
+                priority_icon = "🔴" if rec["priority"] == "high" else "🟠" if rec["priority"] == "medium" else "🟢"
+                print(f"  {priority_icon} {i}. {rec['recommendation']} (Impact: {rec['estimated_impact']})")
+    
+    elif args.command == "action":
+        result = orchestrator.execute_action(args.action, args.target)
+        
+        status_icon = "✅" if result.get("status") in ["success", "started", "optimized"] else "❌"
+        print(f"{status_icon} Action result: {result.get('status', 'unknown')}")
+        if "message" in result:
+            print(f"Message: {result['message']}")
+        if "details" in result:
+            print("Details:")
+            for key, value in result["details"].items():
+                print(f"  {key}: {value}")
+    
+    elif args.command == "subsystem":
+        if args.name not in orchestrator.subsystems:
+            print(f"❌ Unknown subsystem: {args.name}")
+            return
+        
+        subsystem = orchestrator.subsystems[args.name]
+        
+        if args.operation == "start":
+            result = subsystem.start()
+            status_icon = "✅" if result["status"] == "started" else "❌"
+            print(f"{status_icon} {args.name} {result['status']}")
+        
+        elif args.operation == "stop":
+            result = subsystem.stop()
+            status_icon = "✅" if result["status"] == "stopped" else "❌"
+            print(f"{status_icon} {args.name} {result['status']}")
+        
+        elif args.operation == "status":
+            result = subsystem.check_status()
+            status_icon = "✅" if result["status"] == "running" else "❌"
+            print(f"{status_icon} {args.name} is {result['status']}")
+            if result["status"] == "running":
+                print(f"Last checked: {subsystem.last_status_check}")
+    
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

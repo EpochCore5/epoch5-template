@@ -1,0 +1,449 @@
+  #!/usr/bin/env python3
+> """
+> EPOCH5 Autonomous System Visualization Tool
+> Visualizes test data and live system data to evaluate autonomous capabilities
+> Requires matplotlib, pandas, and dash
+> """
+  
+! import os
+! import sys
+! import json
+! import argparse
+! import logging
+! import pandas as pd
+! import matplotlib.pyplot as plt
+! import matplotlib.dates as mdates
+! from pathlib import Path
+! from datetime import datetime, timedelta
+  
+  # Configure logging
+! logging.basicConfig(
+!     level=logging.INFO,
+!     format='%(asctime)s [%(levelname)s] %(message)s',
+!     handlers=[
+!         logging.FileHandler("visualization.log"),
+!         logging.StreamHandler()
+!     ]
+! )
+  
+! logger = logging.getLogger(__name__)
+  
+! class DataVisualizer:
+!     """Visualizes EPOCH5 autonomous system data"""
+      
+!     def __init__(self, data_dir="./test_data"):
+!         """Initialize the visualizer"""
+!         self.data_dir = Path(data_dir)
+!         self.output_dir = Path("./visualizations")
+!         self.output_dir.mkdir(parents=True, exist_ok=True)
+          
+          # Color schemes
+!         self.component_colors = {
+!             "agent_manager": "#4285F4",      # Google Blue
+!             "dag_executor": "#EA4335",       # Google Red
+!             "policy_engine": "#FBBC05",      # Google Yellow
+!             "capsule_loader": "#34A853",     # Google Green
+!             "ceiling_enforcer": "#8F00FF",   # Violet
+!             "integration_service": "#FF6D01" # Orange
+!         }
+          
+!         self.anomaly_colors = {
+!             "resource_exhaustion": "#DC3545",     # Bootstrap Danger
+!             "memory_leak": "#FD7E14",             # Bootstrap Orange
+!             "deadlock": "#6F42C1",                # Bootstrap Purple
+!             "performance_degradation": "#FFC107", # Bootstrap Warning
+!             "connection_failure": "#007BFF",      # Bootstrap Primary
+!             "data_corruption": "#20C997"          # Bootstrap Teal
+!         }
+          
+!         self.severity_colors = {
+!             "low": "#28A745",       # Bootstrap Success
+!             "medium": "#FFC107",    # Bootstrap Warning
+!             "high": "#FD7E14",      # Bootstrap Orange
+!             "critical": "#DC3545"   # Bootstrap Danger
+!         }
+      
+!     def load_metrics_data(self):
+!         """Load component metrics data"""
+!         metrics_file = self.data_dir / "component_metrics.json"
+          
+!         if not metrics_file.exists():
+!             logger.error(f"Metrics file {metrics_file} not found")
+!             return None
+          
+!         with open(metrics_file, 'r') as f:
+!             metrics_data = json.load(f)
+          
+          # Convert to DataFrame
+!         df = pd.DataFrame(metrics_data)
+          
+          # Extract nested metrics
+!         for metric in ["cpu_usage", "memory_usage", "response_time_ms", "error_rate"]:
+!             df[metric] = df["metrics"].apply(lambda x: x.get(metric, 0))
+          
+          # Convert timestamp to datetime
+!         df["timestamp"] = pd.to_datetime(df["timestamp"])
+          
+!         return df
+      
+!     def load_security_events(self):
+!         """Load security events data"""
+!         events_file = self.data_dir / "security_events.json"
+          
+!         if not events_file.exists():
+!             logger.error(f"Security events file {events_file} not found")
+!             return None
+          
+!         with open(events_file, 'r') as f:
+!             events_data = json.load(f)
+          
+          # Convert to DataFrame
+!         df = pd.DataFrame(events_data)
+          
+          # Convert timestamp to datetime
+!         df["timestamp"] = pd.to_datetime(df["timestamp"])
+          
+!         return df
+      
+!     def load_system_decisions(self):
+!         """Load system decisions data"""
+!         decisions_file = self.data_dir / "system_decisions.json"
+          
+!         if not decisions_file.exists():
+!             logger.error(f"System decisions file {decisions_file} not found")
+!             return None
+          
+!         with open(decisions_file, 'r') as f:
+!             decisions_data = json.load(f)
+          
+          # Convert to DataFrame
+!         df = pd.DataFrame(decisions_data)
+          
+          # Convert timestamp to datetime
+!         df["timestamp"] = pd.to_datetime(df["timestamp"])
+          
+!         return df
+      
+!     def visualize_component_metrics(self):
+!         """Visualize component metrics"""
+!         df = self.load_metrics_data()
+          
+!         if df is None or df.empty:
+!             logger.error("No metrics data available for visualization")
+!             return
+          
+!         logger.info("Visualizing component metrics")
+          
+          # Create figure with subplots
+!         fig, axs = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
+          
+          # Get unique components
+!         components = df["component"].unique()
+          
+          # Plot CPU usage over time for each component
+!         for component in components:
+!             component_df = df[df["component"] == component]
+              
+              # Plot normal points
+!             normal_df = component_df[~component_df["is_anomaly"]]
+!             axs[0].plot(normal_df["timestamp"], normal_df["cpu_usage"], 
+!                       marker='.', linestyle='-', alpha=0.7,
+!                       color=self.component_colors.get(component, "#000000"),
+!                       label=f"{component} (normal)")
+              
+              # Plot anomaly points
+!             anomaly_df = component_df[component_df["is_anomaly"]]
+!             for anomaly_type in self.anomaly_colors:
+!                 type_df = anomaly_df[anomaly_df.get("anomaly_type") == anomaly_type]
+!                 if not type_df.empty:
+!                     axs[0].scatter(type_df["timestamp"], type_df["cpu_usage"], 
+!                                  marker='o', s=50, alpha=1.0, 
+!                                  color=self.anomaly_colors.get(anomaly_type, "#FF0000"),
+!                                  label=f"{component} ({anomaly_type})")
+          
+!         axs[0].set_title("CPU Usage Over Time")
+!         axs[0].set_ylabel("CPU Usage (%)")
+!         axs[0].grid(True, alpha=0.3)
+          
+          # Plot Memory usage over time for each component
+!         for component in components:
+!             component_df = df[df["component"] == component]
+              
+              # Plot normal points
+!             normal_df = component_df[~component_df["is_anomaly"]]
+!             axs[1].plot(normal_df["timestamp"], normal_df["memory_usage"], 
+!                       marker='.', linestyle='-', alpha=0.7,
+!                       color=self.component_colors.get(component, "#000000"),
+!                       label=f"{component} (normal)")
+              
+              # Plot anomaly points
+!             anomaly_df = component_df[component_df["is_anomaly"]]
+!             for anomaly_type in self.anomaly_colors:
+!                 type_df = anomaly_df[anomaly_df.get("anomaly_type") == anomaly_type]
+!                 if not type_df.empty:
+!                     axs[1].scatter(type_df["timestamp"], type_df["memory_usage"], 
+!                                  marker='o', s=50, alpha=1.0, 
+!                                  color=self.anomaly_colors.get(anomaly_type, "#FF0000"),
+!                                  label=f"{component} ({anomaly_type})")
+          
+!         axs[1].set_title("Memory Usage Over Time")
+!         axs[1].set_ylabel("Memory Usage (MB)")
+!         axs[1].grid(True, alpha=0.3)
+          
+          # Plot Response time over time for each component
+!         for component in components:
+!             component_df = df[df["component"] == component]
+              
+              # Plot normal points
+!             normal_df = component_df[~component_df["is_anomaly"]]
+!             axs[2].plot(normal_df["timestamp"], normal_df["response_time_ms"], 
+!                       marker='.', linestyle='-', alpha=0.7,
+!                       color=self.component_colors.get(component, "#000000"),
+!                       label=f"{component} (normal)")
+              
+              # Plot anomaly points
+!             anomaly_df = component_df[component_df["is_anomaly"]]
+!             for anomaly_type in self.anomaly_colors:
+!                 type_df = anomaly_df[anomaly_df.get("anomaly_type") == anomaly_type]
+!                 if not type_df.empty:
+!                     axs[2].scatter(type_df["timestamp"], type_df["response_time_ms"], 
+!                                  marker='o', s=50, alpha=1.0, 
+!                                  color=self.anomaly_colors.get(anomaly_type, "#FF0000"),
+!                                  label=f"{component} ({anomaly_type})")
+          
+!         axs[2].set_title("Response Time Over Time")
+!         axs[2].set_ylabel("Response Time (ms)")
+!         axs[2].grid(True, alpha=0.3)
+          
+          # Plot Error rate over time for each component
+!         for component in components:
+!             component_df = df[df["component"] == component]
+              
+              # Plot normal points
+!             normal_df = component_df[~component_df["is_anomaly"]]
+!             axs[3].plot(normal_df["timestamp"], normal_df["error_rate"], 
+!                       marker='.', linestyle='-', alpha=0.7,
+!                       color=self.component_colors.get(component, "#000000"),
+!                       label=f"{component} (normal)")
+              
+              # Plot anomaly points
+!             anomaly_df = component_df[component_df["is_anomaly"]]
+!             for anomaly_type in self.anomaly_colors:
+!                 type_df = anomaly_df[anomaly_df.get("anomaly_type") == anomaly_type]
+!                 if not type_df.empty:
+!                     axs[3].scatter(type_df["timestamp"], type_df["error_rate"], 
+!                                  marker='o', s=50, alpha=1.0, 
+!                                  color=self.anomaly_colors.get(anomaly_type, "#FF0000"),
+!                                  label=f"{component} ({anomaly_type})")
+          
+!         axs[3].set_title("Error Rate Over Time")
+!         axs[3].set_ylabel("Error Rate (%)")
+!         axs[3].grid(True, alpha=0.3)
+          
+          # Format x-axis
+!         for ax in axs:
+!             ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+!             ax.xaxis.set_major_locator(mdates.DayLocator())
+          
+          # Add legend to the first subplot (will be the same for all)
+!         handles, labels = axs[0].get_legend_handles_labels()
+!         by_label = dict(zip(labels, handles))
+!         fig.legend(by_label.values(), by_label.keys(), loc='upper center', bbox_to_anchor=(0.5, 0.98),
+!                    ncol=3, fancybox=True, shadow=True)
+          
+          # Adjust layout
+!         plt.tight_layout(rect=[0, 0, 1, 0.95])
+!         plt.xticks(rotation=45)
+          
+          # Save figure
+!         plt.savefig(self.output_dir / "component_metrics.png", dpi=300, bbox_inches='tight')
+!         logger.info(f"Component metrics visualization saved to {self.output_dir / 'component_metrics.png'}")
+      
+!     def visualize_security_events(self):
+!         """Visualize security events"""
+!         df = self.load_security_events()
+          
+!         if df is None or df.empty:
+!             logger.error("No security events data available for visualization")
+!             return
+          
+!         logger.info("Visualizing security events")
+          
+          # Create figure with subplots
+!         fig, axs = plt.subplots(2, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1]})
+          
+          # Prepare data for event scatter plot
+          # Map severity to numeric value for y-axis
+!         severity_map = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+!         df["severity_value"] = df["severity"].map(severity_map)
+          
+          # Scatter plot of events
+!         for severity in df["severity"].unique():
+!             severity_df = df[df["severity"] == severity]
+!             axs[0].scatter(severity_df["timestamp"], severity_df["severity_value"], 
+!                          s=100, alpha=0.7, 
+!                          color=self.severity_colors.get(severity, "#000000"),
+!                          label=f"{severity.capitalize()}")
+          
+          # Customize scatter plot
+!         axs[0].set_title("Security Events by Severity Over Time")
+!         axs[0].set_ylabel("Severity")
+!         axs[0].set_yticks(list(severity_map.values()))
+!         axs[0].set_yticklabels(list(severity_map.keys()))
+!         axs[0].grid(True, alpha=0.3)
+!         axs[0].legend()
+          
+          # Count events by type
+!         event_counts = df["event_type"].value_counts()
+          
+          # Bar chart of event types
+!         bars = axs[1].bar(event_counts.index, event_counts.values)
+          
+          # Color bars by most common severity for each event type
+!         for i, event_type in enumerate(event_counts.index):
+              # Get most common severity for this event type
+!             type_df = df[df["event_type"] == event_type]
+!             most_common_severity = type_df["severity"].value_counts().idxmax()
+!             bars[i].set_color(self.severity_colors.get(most_common_severity, "#000000"))
+          
+          # Customize bar chart
+!         axs[1].set_title("Security Events by Type")
+!         axs[1].set_ylabel("Count")
+!         axs[1].set_xticklabels(event_counts.index, rotation=45, ha="right")
+!         axs[1].grid(True, alpha=0.3, axis='y')
+          
+          # Format x-axis for scatter plot
+!         axs[0].xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+!         axs[0].xaxis.set_major_locator(mdates.DayLocator())
+          
+          # Adjust layout
+!         plt.tight_layout()
+          
+          # Save figure
+!         plt.savefig(self.output_dir / "security_events.png", dpi=300, bbox_inches='tight')
+!         logger.info(f"Security events visualization saved to {self.output_dir / 'security_events.png'}")
+      
+!     def visualize_system_decisions(self):
+!         """Visualize system decisions"""
+!         df = self.load_system_decisions()
+          
+!         if df is None or df.empty:
+!             logger.error("No system decisions data available for visualization")
+!             return
+          
+!         logger.info("Visualizing system decisions")
+          
+          # Create figure with subplots
+!         fig, axs = plt.subplots(2, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1]})
+          
+          # Create color map for decision types
+!         decision_types = df["decision_type"].unique()
+!         decision_colors = {}
+!         for i, decision_type in enumerate(decision_types):
+              # Generate a color from a predefined list or using a colormap
+!             if i < len(self.component_colors):
+!                 decision_colors[decision_type] = list(self.component_colors.values())[i]
+!             else:
+                  # Fallback to grayscale if we run out of colors
+!                 gray_level = 0.2 + (0.6 * (i - len(self.component_colors)) / max(1, len(decision_types) - len(self.component_colors)))
+!                 decision_colors[decision_type] = (gray_level, gray_level, gray_level)
+          
+          # Outcome markers
+!         outcome_markers = {
+!             "success": "o",      # Circle
+!             "partial_success": "s",  # Square
+!             "failed": "X"        # X
+!         }
+          
+          # Plot decisions over time
+!         for decision_type in decision_types:
+!             type_df = df[df["decision_type"] == decision_type]
+              
+!             for outcome in outcome_markers:
+!                 outcome_df = type_df[type_df["outcome"] == outcome]
+!                 if not outcome_df.empty:
+!                     axs[0].scatter(outcome_df["timestamp"], 
+!                                 [decision_types.tolist().index(decision_type)] * len(outcome_df),
+!                                 marker=outcome_markers[outcome], 
+!                                 s=100, alpha=0.7,
+!                                 color=decision_colors.get(decision_type, "#000000"),
+!                                 label=f"{decision_type} ({outcome})")
+          
+          # Customize scatter plot
+!         axs[0].set_title("System Decisions Over Time")
+!         axs[0].set_ylabel("Decision Type")
+!         axs[0].set_yticks(range(len(decision_types)))
+!         axs[0].set_yticklabels(decision_types)
+!         axs[0].grid(True, alpha=0.3)
+          
+          # Count decisions by outcome
+!         outcome_counts = df["outcome"].value_counts()
+          
+          # Bar chart of outcomes
+!         outcome_colors = {
+!             "success": "#28A745",         # Bootstrap Success
+!             "partial_success": "#FFC107", # Bootstrap Warning
+!             "failed": "#DC3545"           # Bootstrap Danger
+!         }
+          
+!         bars = axs[1].bar(outcome_counts.index, outcome_counts.values)
+          
+          # Color bars by outcome
+!         for i, outcome in enumerate(outcome_counts.index):
+!             bars[i].set_color(outcome_colors.get(outcome, "#000000"))
+          
+          # Customize bar chart
+!         axs[1].set_title("System Decisions by Outcome")
+!         axs[1].set_ylabel("Count")
+!         axs[1].grid(True, alpha=0.3, axis='y')
+          
+          # Format x-axis for scatter plot
+!         axs[0].xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+!         axs[0].xaxis.set_major_locator(mdates.DayLocator())
+          
+          # Add legend with unique entries
+!         handles, labels = axs[0].get_legend_handles_labels()
+!         by_label = dict(zip(labels, handles))
+!         fig.legend(by_label.values(), by_label.keys(), loc='upper center', bbox_to_anchor=(0.5, 0.98),
+!                    ncol=3, fancybox=True, shadow=True)
+          
+          # Adjust layout
+!         plt.tight_layout(rect=[0, 0, 1, 0.95])
+          
+          # Save figure
+!         plt.savefig(self.output_dir / "system_decisions.png", dpi=300, bbox_inches='tight')
+!         logger.info(f"System decisions visualization saved to {self.output_dir / 'system_decisions.png'}")
+      
+!     def visualize_all(self):
+!         """Visualize all data types"""
+!         self.visualize_component_metrics()
+!         self.visualize_security_events()
+!         self.visualize_system_decisions()
+          
+!         logger.info("All visualizations completed successfully")
+  
+  
+! def main():
+!     """Main function to parse arguments and visualize data"""
+!     parser = argparse.ArgumentParser(description='Visualize EPOCH5 autonomous system data')
+!     parser.add_argument('--data-dir', default='./test_data', help='Directory containing data files')
+!     parser.add_argument('--output-dir', default='./visualizations', help='Directory to save visualizations')
+!     parser.add_argument('--type', choices=['all', 'metrics', 'security', 'decisions'], default='all', 
+!                         help='Type of data to visualize')
+      
+!     args = parser.parse_args()
+      
+!     visualizer = DataVisualizer(data_dir=args.data_dir)
+      
+!     if args.type == 'all':
+!         visualizer.visualize_all()
+!     elif args.type == 'metrics':
+!         visualizer.visualize_component_metrics()
+!     elif args.type == 'security':
+!         visualizer.visualize_security_events()
+!     elif args.type == 'decisions':
+!         visualizer.visualize_system_decisions()
+  
+  
+- if __name__ == "__main__":
+-     main()

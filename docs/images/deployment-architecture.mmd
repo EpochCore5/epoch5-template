@@ -1,0 +1,25 @@
+graph LR
+    A[Client Application] --> B[EPOCH5 API]
+    B --> C[Agent Management]
+    B --> D[Policy Enforcement]
+    B --> E[Task Execution]
+    B --> F[Ceiling Management]
+    
+    C --> G[Agent Registry]
+    C --> H[Agent Security]
+    
+    D --> I[Policy Store]
+    D --> J[Grant Verification]
+    
+    E --> K[Execution Engine]
+    E --> L[Capsule Storage]
+    
+    F --> M[Ceiling Dashboard]
+    F --> N[Resource Monitoring]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style C fill:#dfd,stroke:#333,stroke-width:1px
+    style D fill:#dfd,stroke:#333,stroke-width:1px
+    style E fill:#dfd,stroke:#333,stroke-width:1px
+    style F fill:#dfd,stroke:#333,stroke-width:1px

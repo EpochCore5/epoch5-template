@@ -1,0 +1,622 @@
+#!/usr/bin/env python3
+"""
+EPOCH5 Self-Healing System - Autonomous recovery and resilience module
+Provides automatic detection, diagnosis, and recovery from system failures
+Integrates with ceiling management and security systems for comprehensive resilience
+"""
+
+import json
+import time
+import logging
+import threading
+import hashlib
+import os
+from datetime import datetime, timezone
+from typing import Dict, List, Any, Optional, Tuple
+from pathlib import Path
+import random
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler("epoch5_healing.log"),
+        logging.StreamHandler()
+    ]
+)
+
+class SelfHealingEngine:
+    def __init__(self, base_dir: str = "./archive/EPOCH5"):
+        self.base_dir = Path(base_dir)
+        self.healing_dir = self.base_dir / "healing"
+        self.healing_dir.mkdir(parents=True, exist_ok=True)
+        self.recovery_log = self.healing_dir / "recovery_actions.log"
+        self.system_state_file = self.healing_dir / "system_state.json"
+        self.healing_config_file = self.healing_dir / "healing_config.json"
+        
+        # Initialize configuration
+        self._initialize_config()
+        
+        # Track system components
+        self.components = {
+            "ceiling_manager": {"status": "unknown", "last_check": None, "failures": 0},
+            "security_monitor": {"status": "unknown", "last_check": None, "failures": 0},
+            "agent_execution": {"status": "unknown", "last_check": None, "failures": 0},
+            "data_store": {"status": "unknown", "last_check": None, "failures": 0},
+            "api_gateway": {"status": "unknown", "last_check": None, "failures": 0}
+        }
+        
+        # Load or initialize system state
+        self._load_system_state()
+        
+        # Recovery strategies mapped to failure types
+        self.recovery_strategies = {
+            "ceiling_manager": self._recover_ceiling_manager,
+            "security_monitor": self._recover_security_monitor,
+            "agent_execution": self._recover_agent_execution,
+            "data_store": self._recover_data_store,
+            "api_gateway": self._recover_api_gateway
+        }
+        
+        # Healing metrics
+        self.metrics = {
+            "total_failures_detected": 0,
+            "successful_recoveries": 0,
+            "failed_recoveries": 0,
+            "last_healing_action": None,
+            "healing_success_rate": 100.0,
+            "mttr": 0.0  # Mean Time To Recovery (seconds)
+        }
+        
+        self.is_monitoring = False
+        self.monitor_thread = None
+    
+    def timestamp(self) -> str:
+        """Generate ISO timestamp consistent with EPOCH5"""
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    def sha256(self, data: str) -> str:
+        """Generate SHA256 hash consistent with EPOCH5"""
+        return hashlib.sha256(data.encode("utf-8")).hexdigest()
+    
+    def _initialize_config(self):
+        """Initialize default healing configuration"""
+        if not self.healing_config_file.exists():
+            default_config = {
+                "monitoring_interval": 60,  # seconds
+                "max_recovery_attempts": 3,
+                "recovery_backoff": 1.5,    # multiplier for successive attempts
+                "auto_recovery": True,
+                "recovery_thresholds": {
+                    "ceiling_manager": 2,    # failures before recovery
+                    "security_monitor": 1,   # immediate recovery
+                    "agent_execution": 3,    # more tolerance
+                    "data_store": 2,
+                    "api_gateway": 2
+                },
+                "healing_protocols": {
+                    "restart_service": True,
+                    "rebuild_index": True,
+                    "clear_cache": True,
+                    "restore_defaults": True,
+                    "rotate_credentials": True
+                },
+                "notification": {
+                    "enabled": True,
+                    "levels": ["critical", "error"],
+                    "rate_limit": 10  # max notifications per hour
+                },
+                "created_at": self.timestamp(),
+                "last_modified": self.timestamp()
+            }
+            with open(self.healing_config_file, "w") as f:
+                json.dump(default_config, f, indent=2)
+            self.config = default_config
+        else:
+            with open(self.healing_config_file, "r") as f:
+                self.config = json.load(f)
+    
+    def _load_system_state(self):
+        """Load current system state or initialize if not exists"""
+        if self.system_state_file.exists():
+            with open(self.system_state_file, "r") as f:
+                state_data = json.load(f)
+                self.components = state_data.get("components", self.components)
+                self.metrics = state_data.get("metrics", self.metrics)
+        else:
+            self._save_system_state()
+    
+    def _save_system_state(self):
+        """Save current system state"""
+        state_data = {
+            "components": self.components,
+            "metrics": self.metrics,
+            "last_updated": self.timestamp()
+        }
+        with open(self.system_state_file, "w") as f:
+            json.dump(state_data, f, indent=2)
+    
+    def log_recovery_action(self, component: str, action: str, result: bool, details: Dict[str, Any]):
+        """Log recovery action to recovery log"""
+        log_entry = {
+            "timestamp": self.timestamp(),
+            "component": component,
+            "action": action,
+            "result": "success" if result else "failure",
+            "details": details,
+            "hash": self.sha256(f"{component}|{action}|{json.dumps(details, sort_keys=True)}")
+        }
+        
+        with open(self.recovery_log, "a") as f:
+            f.write(f"{json.dumps(log_entry)}\n")
+        
+        logging.info(f"Recovery action: {component} - {action} - {log_entry['result']}")
+        
+        # Update metrics
+        self.metrics["last_healing_action"] = self.timestamp()
+        if result:
+            self.metrics["successful_recoveries"] += 1
+        else:
+            self.metrics["failed_recoveries"] += 1
+        
+        total_recoveries = self.metrics["successful_recoveries"] + self.metrics["failed_recoveries"]
+        if total_recoveries > 0:
+            self.metrics["healing_success_rate"] = (self.metrics["successful_recoveries"] / total_recoveries) * 100
+        
+        self._save_system_state()
+        
+        return log_entry
+    
+    def check_component_health(self, component: str) -> Dict[str, Any]:
+        """Check health of a specific component"""
+        # In a real system, this would have actual health checks
+        # This is a simulation for demonstration purposes
+        
+        # Simulate occasional failures (10% chance)
+        is_healthy = random.random() > 0.1
+        
+        if not is_healthy:
+            failure_types = [
+                "resource_exhaustion", 
+                "timeout", 
+                "connection_error",
+                "data_corruption",
+                "permission_denied"
+            ]
+            failure_type = random.choice(failure_types)
+        else:
+            failure_type = None
+        
+        result = {
+            "component": component,
+            "status": "healthy" if is_healthy else "degraded",
+            "checked_at": self.timestamp(),
+            "failure_type": failure_type,
+            "metrics": {
+                "response_time": random.uniform(0.1, is_healthy and 0.5 or 2.0),
+                "cpu_usage": random.uniform(10, is_healthy and 50 or 95),
+                "memory_usage": random.uniform(20, is_healthy and 60 or 90),
+                "error_rate": random.uniform(0, is_healthy and 0.1 or 5.0)
+            }
+        }
+        
+        # Update component status
+        self.components[component]["status"] = result["status"]
+        self.components[component]["last_check"] = result["checked_at"]
+        if not is_healthy:
+            self.components[component]["failures"] += 1
+            self.metrics["total_failures_detected"] += 1
+        else:
+            self.components[component]["failures"] = 0
+        
+        self._save_system_state()
+        return result
+    
+    def monitor_system_health(self):
+        """Monitor health of all system components"""
+        self.is_monitoring = True
+        logging.info("Starting system health monitoring")
+        
+        try:
+            while self.is_monitoring:
+                for component in self.components:
+                    health = self.check_component_health(component)
+                    logging.info(f"Health check: {component} - {health['status']}")
+                    
+                    # Check if recovery is needed
+                    if (health["status"] != "healthy" and 
+                        self.components[component]["failures"] >= self.config["recovery_thresholds"].get(component, 2)):
+                        if self.config["auto_recovery"]:
+                            self.recover_component(component)
+                
+                # Save updated state
+                self._save_system_state()
+                
+                # Wait for next check interval
+                time.sleep(self.config["monitoring_interval"])
+                
+        except Exception as e:
+            logging.error(f"Error in health monitoring: {str(e)}")
+            self.is_monitoring = False
+    
+    def start_monitoring(self):
+        """Start health monitoring in background thread"""
+        if not self.is_monitoring:
+            self.monitor_thread = threading.Thread(target=self.monitor_system_health)
+            self.monitor_thread.daemon = True
+            self.monitor_thread.start()
+            return {"status": "started", "timestamp": self.timestamp()}
+        return {"status": "already_running", "timestamp": self.timestamp()}
+    
+    def stop_monitoring(self):
+        """Stop health monitoring"""
+        if self.is_monitoring:
+            self.is_monitoring = False
+            if self.monitor_thread:
+                self.monitor_thread.join(timeout=2.0)
+            return {"status": "stopped", "timestamp": self.timestamp()}
+        return {"status": "not_running", "timestamp": self.timestamp()}
+    
+    def recover_component(self, component: str) -> Dict[str, Any]:
+        """Attempt to recover a failing component"""
+        if component not in self.components:
+            return {"status": "error", "message": f"Unknown component: {component}"}
+        
+        if component not in self.recovery_strategies:
+            return {"status": "error", "message": f"No recovery strategy for: {component}"}
+        
+        # Get recovery function
+        recovery_func = self.recovery_strategies[component]
+        
+        # Attempt recovery
+        start_time = time.time()
+        try:
+            result = recovery_func()
+            success = result.get("status") == "recovered"
+        except Exception as e:
+            success = False
+            result = {"status": "error", "message": str(e)}
+        
+        recovery_time = time.time() - start_time
+        
+        # Update MTTR (Mean Time To Recovery)
+        if self.metrics["successful_recoveries"] > 0:
+            current_mttr = self.metrics["mttr"]
+            new_recoveries = self.metrics["successful_recoveries"]
+            self.metrics["mttr"] = ((current_mttr * (new_recoveries - 1)) + recovery_time) / new_recoveries
+        else:
+            self.metrics["mttr"] = recovery_time
+        
+        # Log the recovery
+        self.log_recovery_action(
+            component=component,
+            action=f"auto_recovery_{result.get('method', 'unknown')}",
+            result=success,
+            details={
+                "recovery_time": recovery_time,
+                "result": result,
+                "previous_failures": self.components[component]["failures"]
+            }
+        )
+        
+        # Reset failure count on success
+        if success:
+            self.components[component]["failures"] = 0
+            self.components[component]["status"] = "recovered"
+        
+        self._save_system_state()
+        
+        return {
+            "component": component,
+            "recovery_result": result,
+            "success": success,
+            "recovery_time": recovery_time,
+            "timestamp": self.timestamp()
+        }
+    
+    # Recovery implementations for different components
+    def _recover_ceiling_manager(self) -> Dict[str, Any]:
+        """Recover ceiling manager"""
+        # Simulate recovery actions
+        time.sleep(random.uniform(0.5, 2.0))
+        success = random.random() > 0.2  # 80% success rate
+        
+        methods = ["restart_service", "rebuild_index", "clear_cache", "restore_defaults"]
+        method = random.choice(methods)
+        
+        if success:
+            return {
+                "status": "recovered",
+                "method": method,
+                "message": f"Ceiling Manager recovered using {method}"
+            }
+        else:
+            return {
+                "status": "failed",
+                "method": method,
+                "message": f"Failed to recover Ceiling Manager using {method}"
+            }
+    
+    def _recover_security_monitor(self) -> Dict[str, Any]:
+        """Recover security monitor"""
+        # Simulate recovery actions
+        time.sleep(random.uniform(0.5, 1.5))
+        success = random.random() > 0.1  # 90% success rate
+        
+        methods = ["restart_service", "rotate_credentials", "clear_alerts", "reinitialize"]
+        method = random.choice(methods)
+        
+        if success:
+            return {
+                "status": "recovered",
+                "method": method,
+                "message": f"Security Monitor recovered using {method}"
+            }
+        else:
+            return {
+                "status": "failed",
+                "method": method,
+                "message": f"Failed to recover Security Monitor using {method}"
+            }
+    
+    def _recover_agent_execution(self) -> Dict[str, Any]:
+        """Recover agent execution environment"""
+        # Simulate recovery actions
+        time.sleep(random.uniform(1.0, 3.0))
+        success = random.random() > 0.3  # 70% success rate
+        
+        methods = ["restart_service", "clear_queue", "reset_contexts", "terminate_hung_processes"]
+        method = random.choice(methods)
+        
+        if success:
+            return {
+                "status": "recovered",
+                "method": method,
+                "message": f"Agent Execution Environment recovered using {method}"
+            }
+        else:
+            return {
+                "status": "failed",
+                "method": method,
+                "message": f"Failed to recover Agent Execution Environment using {method}"
+            }
+    
+    def _recover_data_store(self) -> Dict[str, Any]:
+        """Recover data store"""
+        # Simulate recovery actions
+        time.sleep(random.uniform(2.0, 5.0))
+        success = random.random() > 0.25  # 75% success rate
+        
+        methods = ["reconnect", "rebuild_index", "verify_integrity", "restore_from_backup"]
+        method = random.choice(methods)
+        
+        if success:
+            return {
+                "status": "recovered",
+                "method": method,
+                "message": f"Data Store recovered using {method}"
+            }
+        else:
+            return {
+                "status": "failed",
+                "method": method,
+                "message": f"Failed to recover Data Store using {method}"
+            }
+    
+    def _recover_api_gateway(self) -> Dict[str, Any]:
+        """Recover API gateway"""
+        # Simulate recovery actions
+        time.sleep(random.uniform(0.5, 2.0))
+        success = random.random() > 0.15  # 85% success rate
+        
+        methods = ["restart_service", "reset_connections", "reload_configuration"]
+        method = random.choice(methods)
+        
+        if success:
+            return {
+                "status": "recovered",
+                "method": method,
+                "message": f"API Gateway recovered using {method}"
+            }
+        else:
+            return {
+                "status": "failed",
+                "method": method,
+                "message": f"Failed to recover API Gateway using {method}"
+            }
+    
+    def get_system_health_report(self) -> Dict[str, Any]:
+        """Generate comprehensive system health report"""
+        # Check all components first
+        for component in self.components:
+            self.check_component_health(component)
+        
+        # Calculate overall health score (0-100)
+        component_scores = []
+        for component, info in self.components.items():
+            if info["status"] == "healthy":
+                component_scores.append(100)
+            elif info["status"] == "degraded":
+                component_scores.append(50)
+            elif info["status"] == "recovered":
+                component_scores.append(80)
+            else:
+                component_scores.append(0)
+        
+        if component_scores:
+            overall_health = sum(component_scores) / len(component_scores)
+        else:
+            overall_health = 0
+        
+        # Determine system status
+        if overall_health >= 90:
+            system_status = "optimal"
+        elif overall_health >= 70:
+            system_status = "good"
+        elif overall_health >= 40:
+            system_status = "degraded"
+        else:
+            system_status = "critical"
+        
+        report = {
+            "timestamp": self.timestamp(),
+            "overall_health_score": overall_health,
+            "system_status": system_status,
+            "components": self.components,
+            "healing_metrics": self.metrics,
+            "recommendations": self._generate_recommendations(),
+        }
+        
+        return report
+    
+    def _generate_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate system improvement recommendations based on health data"""
+        recommendations = []
+        
+        # Look for patterns in failures
+        problem_components = [comp for comp, info in self.components.items() 
+                             if info["failures"] > 0 or info["status"] != "healthy"]
+        
+        if len(problem_components) > 2:
+            recommendations.append({
+                "priority": "high",
+                "area": "infrastructure",
+                "recommendation": "Consider scaling infrastructure resources as multiple components are showing issues",
+                "estimated_impact": "high"
+            })
+        
+        # Check for specific component recommendations
+        for component, info in self.components.items():
+            if info["failures"] >= 3:
+                recommendations.append({
+                    "priority": "high",
+                    "area": component,
+                    "recommendation": f"Investigate persistent failures in {component}",
+                    "estimated_impact": "high"
+                })
+            elif info["status"] != "healthy" and info["status"] != "recovered":
+                recommendations.append({
+                    "priority": "medium",
+                    "area": component,
+                    "recommendation": f"Address degraded performance in {component}",
+                    "estimated_impact": "medium"
+                })
+        
+        # Add general recommendations if needed
+        if self.metrics["healing_success_rate"] < 80:
+            recommendations.append({
+                "priority": "medium",
+                "area": "recovery",
+                "recommendation": "Review and enhance recovery strategies due to below-target success rate",
+                "estimated_impact": "medium"
+            })
+        
+        if self.metrics["mttr"] > 10:  # If MTTR > 10 seconds
+            recommendations.append({
+                "priority": "medium",
+                "area": "performance",
+                "recommendation": "Optimize recovery processes to reduce Mean Time To Recovery",
+                "estimated_impact": "medium"
+            })
+        
+        # Add maintenance recommendation periodically
+        maintenance_needed = random.random() > 0.7  # 30% chance
+        if maintenance_needed:
+            recommendations.append({
+                "priority": "low",
+                "area": "maintenance",
+                "recommendation": "Perform routine system maintenance to prevent potential issues",
+                "estimated_impact": "medium"
+            })
+        
+        return recommendations
+
+
+def main():
+    """CLI interface for self-healing system"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="EPOCH5 Self-Healing System")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # Start monitoring command
+    start_parser = subparsers.add_parser("start", help="Start autonomous healing")
+    
+    # Stop monitoring command
+    stop_parser = subparsers.add_parser("stop", help="Stop autonomous healing")
+    
+    # Status command
+    status_parser = subparsers.add_parser("status", help="Get system health status")
+    
+    # Recover command
+    recover_parser = subparsers.add_parser("recover", help="Manually trigger recovery")
+    recover_parser.add_argument("component", help="Component to recover", 
+                              choices=["ceiling_manager", "security_monitor", "agent_execution", 
+                                       "data_store", "api_gateway", "all"])
+    
+    args = parser.parse_args()
+    
+    healing_engine = SelfHealingEngine()
+    
+    if args.command == "start":
+        result = healing_engine.start_monitoring()
+        print(f"Self-healing monitoring {result['status']} at {result['timestamp']}")
+        print("System will automatically detect and recover from failures")
+        print("Use 'stop' command to halt monitoring")
+    
+    elif args.command == "stop":
+        result = healing_engine.stop_monitoring()
+        print(f"Self-healing monitoring {result['status']} at {result['timestamp']}")
+    
+    elif args.command == "status":
+        report = healing_engine.get_system_health_report()
+        
+        print(f"\n🔍 EPOCH5 System Health Report ({report['timestamp']})")
+        print(f"Overall Health Score: {report['overall_health_score']:.2f}/100")
+        print(f"System Status: {report['system_status'].upper()}")
+        print("\nComponent Status:")
+        
+        for component, info in report["components"].items():
+            status_icon = "✅" if info["status"] == "healthy" else "⚠️" if info["status"] == "recovered" else "❌"
+            print(f"  {status_icon} {component}: {info['status'].upper()} - Failures: {info['failures']}")
+        
+        print("\nHealing Metrics:")
+        print(f"  Total Failures Detected: {report['healing_metrics']['total_failures_detected']}")
+        print(f"  Successful Recoveries: {report['healing_metrics']['successful_recoveries']}")
+        print(f"  Failed Recoveries: {report['healing_metrics']['failed_recoveries']}")
+        print(f"  Healing Success Rate: {report['healing_metrics']['healing_success_rate']:.2f}%")
+        print(f"  Mean Time To Recovery: {report['healing_metrics']['mttr']:.2f} seconds")
+        
+        if report["recommendations"]:
+            print("\nRecommendations:")
+            for i, rec in enumerate(report["recommendations"], 1):
+                priority_icon = "🔴" if rec["priority"] == "high" else "🟠" if rec["priority"] == "medium" else "🟢"
+                print(f"  {priority_icon} {i}. {rec['recommendation']} (Impact: {rec['estimated_impact']})")
+    
+    elif args.command == "recover":
+        if args.component == "all":
+            results = {}
+            for component in healing_engine.components:
+                result = healing_engine.recover_component(component)
+                results[component] = result
+            
+            print("Recovery results:")
+            for component, result in results.items():
+                success_icon = "✅" if result["success"] else "❌"
+                print(f"  {success_icon} {component}: {result['recovery_result']['status']} - {result['recovery_result']['message']}")
+                print(f"     Recovery time: {result['recovery_time']:.2f}s")
+        else:
+            result = healing_engine.recover_component(args.component)
+            
+            success_icon = "✅" if result["success"] else "❌"
+            print(f"Recovery result: {success_icon} {result['recovery_result']['status']}")
+            print(f"Message: {result['recovery_result']['message']}")
+            print(f"Recovery time: {result['recovery_time']:.2f}s")
+    
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

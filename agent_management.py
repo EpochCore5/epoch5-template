@@ -13,6 +13,13 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
+# Import security and audit components if available
+try:
+    from epoch_audit import EpochAudit
+    SECURITY_SYSTEM_AVAILABLE = True
+except ImportError:
+    SECURITY_SYSTEM_AVAILABLE = False
+
 
 class AgentManager:
     def __init__(self, base_dir: str = "./archive/EPOCH5"):
@@ -22,6 +29,12 @@ class AgentManager:
         self.registry_file = self.agents_dir / "registry.json"
         self.anomalies_file = self.agents_dir / "anomalies.log"
         self.heartbeat_file = self.agents_dir / "agent_heartbeats.log"
+        
+        # Initialize audit system if available
+        if SECURITY_SYSTEM_AVAILABLE:
+            self.audit_system = EpochAudit(base_dir)
+        else:
+            self.audit_system = None
 
     def timestamp(self) -> str:
         """Generate ISO timestamp consistent with EPOCH5"""
@@ -81,6 +94,20 @@ class AgentManager:
         registry = self.load_registry()
         registry["agents"][agent["did"]] = agent
         self.save_registry(registry)
+        
+        # Log agent registration to security audit
+        if self.audit_system:
+            self.audit_system.log_event(
+                "agent_registration",
+                f"Agent registered: {agent['did']}",
+                {
+                    "agent_did": agent["did"],
+                    "agent_type": agent["type"],
+                    "skills": agent["skills"],
+                    "timestamp": agent["created_at"]
+                }
+            )
+            
         return True
 
     def get_agent(self, did: str) -> Optional[Dict[str, Any]]:
@@ -101,6 +128,12 @@ class AgentManager:
             agent["reliability_score"] = (
                 agent["successful_tasks"] / agent["total_tasks"]
             )
+            
+            # Apply ceiling enforcement to latency if security system is available
+            if self.audit_system:
+                latency_result = self.audit_system.enforce_ceiling("execution_time", latency, did)
+                if latency_result["capped"]:
+                    latency = latency_result["final_value"]
 
             # Update average latency (exponential moving average)
             alpha = 0.1
@@ -109,6 +142,23 @@ class AgentManager:
             )
 
             self.save_registry(registry)
+            
+            # Log stat update to security audit
+            if self.audit_system:
+                self.audit_system.log_event(
+                    "agent_stats_update",
+                    f"Agent stats updated: {did}",
+                    {
+                        "agent_did": did,
+                        "success": success,
+                        "latency": latency,
+                        "reliability_score": agent["reliability_score"],
+                        "average_latency": agent["average_latency"],
+                        "total_tasks": agent["total_tasks"],
+                        "successful_tasks": agent["successful_tasks"]
+                    }
+                )
+                
             return True
         return False
 
@@ -137,6 +187,19 @@ class AgentManager:
 
         with open(self.anomalies_file, "a") as f:
             f.write(f"{json.dumps(anomaly)}\n")
+            
+        # Log anomaly to security audit
+        if self.audit_system:
+            self.audit_system.log_event(
+                "agent_anomaly",
+                f"Agent anomaly detected: {did} - {anomaly_type}",
+                {
+                    "agent_did": did,
+                    "anomaly_type": anomaly_type,
+                    "details": details,
+                    "hash": anomaly["hash"]
+                }
+            )
 
         return anomaly
 

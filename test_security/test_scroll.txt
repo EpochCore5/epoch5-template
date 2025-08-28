@@ -1,0 +1,458 @@
+===== EPOCH5 AUDIT SCROLL =====
+Generated at: 2025-08-28T10:07:06.699251+00:00
+Events: 100
+==============================
+
+[2025-08-28T10:07:06.695992+00:00] test3: Test event 3
+  Seal: e147900275dfafc182a634a29c3ea9dcdc6c8387d5b7878b0f268359ae97caab
+
+[2025-08-28T10:07:06.695912+00:00] test2: Test event 2
+  Seal: d75572435e43dd1a786244261172b4cd1616a7210ddb3b821d48ab7b606228d0
+
+[2025-08-28T10:07:06.695816+00:00] test1: Test event 1
+  Seal: 7b360f6205d161f9cf99101f20eeb842e111c360fba13be21a9d481ccfcf891e
+
+[2025-08-28T10:07:06.695135+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375626
+  Seal: 7e3809aaa79bb7f5745231f8b6de9c96251dd1c3583e581f563c5770075f0fcd
+
+[2025-08-28T10:07:06.692681+00:00] ceiling_update: Ceiling updated for task_priority: 100 → 200
+  Data: {
+  "value_type": "task_priority",
+  "old_ceiling": 100,
+  "new_ceiling": 200
+}
+  Seal: 129b981f0349ec11286e2f65fa23d58bdd91c6173c10c8cf6fe0350fad03068c
+
+[2025-08-28T10:07:06.691947+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375626
+  Seal: e1393a4fdd63453eca1ae21111b4ef50a6cea793fa3b9b9c926ba71c956693bb
+
+[2025-08-28T10:07:06.689203+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 205516eeb5a621b65af707567329d5d89cb6f6082f22706b3b095b5bd714b313
+
+[2025-08-28T10:07:06.688498+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375626
+  Seal: 408bb89a05157176547170bb378dea09fc58a6227661c4d03988d144921793ce
+
+[2025-08-28T10:07:06.686871+00:00] test: Test event
+  Data: {
+  "test_data": "value"
+}
+  Seal: 37817d859682e97859a7f5c637e9f269776521ee9f1d219316bc9dd3eb8cbd4a
+
+[2025-08-28T10:07:06.686355+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375626
+  Seal: 7526e08ffb5a4f03050de1e79956419220bf81efdae6e28ea0e2393161bc5cf0
+
+[2025-08-28T10:06:51.927378+00:00] other_event: Other event
+  Seal: 1d6e26ae0b20716a76110fcc85682da02ad155e1b8888670147fe4ba9a3521af
+
+[2025-08-28T10:06:51.927274+00:00] filter_test_2: Filter test event 2
+  Seal: b9bfd0e5f5c047b73a6dc20d20386a557ae310f8785d728cca522c3fee92536a
+
+[2025-08-28T10:06:51.927189+00:00] filter_test_1: Filter test event 1
+  Seal: 654eade0520ad57544a61d86fa7a81dfb82f47e191f4f93969efc0199cb695e1
+
+[2025-08-28T10:06:51.926710+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 8604ec927d6231997e0f683ad5b737255e697c90aedc8ee0bd51e64e52d4a577
+
+[2025-08-28T10:06:51.920230+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: deb3ff65f853bf94dbdff34fbd9783108fe54e770c827640b7785001ae8f3f22
+
+[2025-08-28T10:06:51.919751+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 706b1a0e1675f494dbb2b74366a283cc92e25f5932b8f85901f4a9812d4c7d92
+
+[2025-08-28T10:06:51.917582+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 949647e4f5b23719fbbc649d6f56c35ef4d9ee4301c114b5cc1e561ab2989587
+
+[2025-08-28T10:06:51.911046+00:00] ceiling_update: Ceiling updated for resource_allocation: 100 → 150
+  Data: {
+  "value_type": "resource_allocation",
+  "old_ceiling": 100,
+  "new_ceiling": 150
+}
+  Seal: 384488e98c7a1f5a6d17fe3a5f714fabf96dea15a43299a01f25b67c1dd05612
+
+[2025-08-28T10:06:51.910733+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 16fbf579de3b4b83b2a8b7388327f1258bc7f02df5d1f412dc842b2a8615e83d
+
+[2025-08-28T10:06:51.910638+00:00] sequence: Starting sequence test
+  Seal: adf590c885ccd069e7bb517822247ecd49de217ca1b29a21c6513f4b38b837de
+
+[2025-08-28T10:06:51.910114+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 28edaba58d9fa342e93123b64ecd0d26dfc5cd6f07529df4eff3e75908f20f7b
+
+[2025-08-28T10:06:51.902601+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: ecea0fa492238f72480d28494e6b3f8f63f602995954489061ef8ce5e9d856c8
+
+[2025-08-28T10:06:51.895950+00:00] test3: Test event 3
+  Seal: 98a2be88848e26cca3c2933af07f14414d96dc36f25e0845e35d985f1b70e8d5
+
+[2025-08-28T10:06:51.895860+00:00] test2: Test event 2
+  Seal: 451f7ed1d092a8b4bc5e9fa48cd2b4717df9745b3b78638030a00762dd18667b
+
+[2025-08-28T10:06:51.895750+00:00] test1: Test event 1
+  Seal: fd651bd520d50d8a32f69c231c96705f9e2a910fca6379858608d32fa50ff1bf
+
+[2025-08-28T10:06:51.895015+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: e412e863ad88cdffeab435ed5b25193ee3432c3a9574c0e775751b76dad5a445
+
+[2025-08-28T10:06:51.893229+00:00] ceiling_update: Ceiling updated for task_priority: 100 → 200
+  Data: {
+  "value_type": "task_priority",
+  "old_ceiling": 100,
+  "new_ceiling": 200
+}
+  Seal: b1a8afaf14a626f25f4fd7b0f1f90ac291e3ceadf630cbd5c511de1c73de5103
+
+[2025-08-28T10:06:51.892717+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 735ac39eb8c3786e0dc1009c43c49c48f0e116a61503be4421dc53c311092ecf
+
+[2025-08-28T10:06:51.887355+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 51f2b226c2528991aff85aeca383fe89a5249ba32e3e81a9b22c1f31a10fdd07
+
+[2025-08-28T10:06:51.886530+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 9d81d445b8997a4d492e21649d1d42cae3ef2eade11eb686d6db6685a27f0f93
+
+[2025-08-28T10:06:51.884095+00:00] test: Test event
+  Data: {
+  "test_data": "value"
+}
+  Seal: 7195cece0a10d983a77d60f7dcf6a9e15af7c6a3e7ac6420ae8398ed38158435
+
+[2025-08-28T10:06:51.883374+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375611
+  Seal: 38a57dc7e697520f202e99560d4db249d0247258e333fbc5d9fd4459d4fdb56d
+
+[2025-08-28T10:01:06.661901+00:00] other_event: Other event
+  Seal: 3409bd068d53856dc2c7c8655a49ed1730ef0864323ae3f858e1db7b8eb4c159
+
+[2025-08-28T10:01:06.661820+00:00] filter_test_2: Filter test event 2
+  Seal: 564110ff4bf228a8f7b6c8021a4f071561ebadc3dd5d4b815c7816b4876507d7
+
+[2025-08-28T10:01:06.661738+00:00] filter_test_1: Filter test event 1
+  Seal: 5130699bf5201b04a485ad0d9768133b78a8dd59eba822d568bbd322cb4ef34f
+
+[2025-08-28T10:01:06.661259+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 99ec529b8a8beead0ca6bb6fc220130df29ac31800f5005ee3d53185bd13b447
+
+[2025-08-28T10:01:06.654783+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: 9e6468e03cdf3ba445d193d25d4822987ca6496e1c81f153ea5ed50c2f871cab
+
+[2025-08-28T10:01:06.654303+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 2da0f93d5a17d744614cf40a87269cfcb20bc7f6f59fe5169c0cc092c2f42f28
+
+[2025-08-28T10:01:06.652171+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: f08bab9062561bee0858f103365acc9222b14194e767d4f966ab2b0213efffe0
+
+[2025-08-28T10:01:06.645579+00:00] ceiling_update: Ceiling updated for resource_allocation: 100 → 150
+  Data: {
+  "value_type": "resource_allocation",
+  "old_ceiling": 100,
+  "new_ceiling": 150
+}
+  Seal: 1d325b6a4d80f669edf0035464663e1ab44986e57f2c8c38633171595a05f216
+
+[2025-08-28T10:01:06.645108+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: aef60d739a5abcf7a3bf2783ad98c72ec0506f14de443bd759a44a11e65e0171
+
+[2025-08-28T10:01:06.644988+00:00] sequence: Starting sequence test
+  Seal: 5fb526c40ea3681a6e681202da7ef6ccf0c0f5e8ed9ce5d2786fcfafd9d419c7
+
+[2025-08-28T10:01:06.644288+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 55b3aafa261b03162f63a38199cafee526b52ec36937ac1c79ab01191a24e369
+
+[2025-08-28T10:01:06.638003+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 8df7eb016aaafbf1da75956ccf198d0f5b2c0bce279282006e59f043be79f120
+
+[2025-08-28T10:01:06.632111+00:00] test3: Test event 3
+  Seal: ecb95ca88c145b7dc8f9732562871cb3c56370dab396934b9f60f67ec0b76ea4
+
+[2025-08-28T10:01:06.632026+00:00] test2: Test event 2
+  Seal: 8ffa24e874f0400456c9e0677cebf5e73f281ddf851161d82a8c2670263f9820
+
+[2025-08-28T10:01:06.631911+00:00] test1: Test event 1
+  Seal: 633039f8823eb89f47a52624325163b269af83f8adaab6c34e854de32c73a9aa
+
+[2025-08-28T10:01:06.631412+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 2d35b6dfda5fb71bc03f02fb6ba95b498bdcd05ef1878bab30f8b9bee783dd05
+
+[2025-08-28T10:01:06.629159+00:00] ceiling_update: Ceiling updated for task_priority: 100 → 200
+  Data: {
+  "value_type": "task_priority",
+  "old_ceiling": 100,
+  "new_ceiling": 200
+}
+  Seal: e3f6c6a01c52825b10363b2c4674479b65517a9611ededbe5d57e3f3ff0d2701
+
+[2025-08-28T10:01:06.628434+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: bfb3c4ae56db53490a5bf9c69d8c28067f3042eeacf2873e4b757170ededecb5
+
+[2025-08-28T10:01:06.626256+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: d81398da22a0f6bd7f86b306dc74aa6c0eb376e1c030dcca77d3ba8dc54b1413
+
+[2025-08-28T10:01:06.625770+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 124a53c3b0b7a69a05963591f4a411c7881d0e13da64fe30cad158aa6aa0b404
+
+[2025-08-28T10:01:06.623840+00:00] test: Test event
+  Data: {
+  "test_data": "value"
+}
+  Seal: 2218399be0eee1d110aebcda3447e7dfd7d13c2da4bdefbb7ebb621686ec7d45
+
+[2025-08-28T10:01:06.623016+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375266
+  Seal: 12ad04c47150c8e9659649a16e50c2378f41861687d852fd64453cd7e55d499a
+
+[2025-08-28T09:58:54.544704+00:00] other_event: Other event
+  Seal: 6061e9585199cd704f74cb1bb617bc5260e0a6128928ccf39dc310e721ebc31a
+
+[2025-08-28T09:58:54.544622+00:00] filter_test_2: Filter test event 2
+  Seal: 27133bf05e2e0ef324e5523f511cbebc2e807b7cbc0bf75fa1d5c9a8b8554df1
+
+[2025-08-28T09:58:54.544537+00:00] filter_test_1: Filter test event 1
+  Seal: 4b2a8b422ad3e9058e88e7099f3952dd06448997532142f3ef6eed9e37c90682
+
+[2025-08-28T09:58:54.544017+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: d9d3413f367dc36045407ab2d2b15ada903f6953cac8a3f916d9d199b5af7f38
+
+[2025-08-28T09:58:54.538203+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: 52912129fd42630f21dc720bc1184c6e9955599761152974ef2fdb7a912f8e82
+
+[2025-08-28T09:58:54.537749+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: 09df7b7e802f7322a36d909a1fc55d919ed42b0a1f584ef4497b856857d6e00b
+
+[2025-08-28T09:58:54.535641+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: 10565cef4bf93e8a7c37893fd2cddb770ec4e51477e92eac546759cf5756dc39
+
+[2025-08-28T09:58:54.529045+00:00] ceiling_update: Ceiling updated for resource_allocation: 100 → 150
+  Data: {
+  "value_type": "resource_allocation",
+  "old_ceiling": 100,
+  "new_ceiling": 150
+}
+  Seal: 398df3c8891566e76c79dc564ef5921f877157bc43bbd1f5321350476784fafa
+
+[2025-08-28T09:58:54.528659+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 7c0d21f430aaf170fc5da5e34dc474d48cc47086d68ab31fdb97a3b54b781f55
+
+[2025-08-28T09:58:54.528543+00:00] sequence: Starting sequence test
+  Seal: 86655e34fedbdc00fd37354abfb08defa72eb41be9473bb3dff68ee3da135bda
+
+[2025-08-28T09:58:54.527833+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: 951b2ab55845cd835af967f88eae8b20e1e4b184c6d89ed27a8f1aba266977f8
+
+[2025-08-28T09:58:54.522063+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: 0394efdbec79051f3d88c037c6286dc6be6c458e3389aba9bf466aa1f60b5da7
+
+[2025-08-28T09:58:54.514500+00:00] test3: Test event 3
+  Seal: 6cc7d4cd9dea2876b30e2f1bfaedfd52b10b2a758c789d1c6a376e063eb7ef09
+
+[2025-08-28T09:58:54.514407+00:00] test2: Test event 2
+  Seal: 4a649a709e646350ebda1abdd30283f63b5b5c2eb3bdc2ebf7242d5a49315347
+
+[2025-08-28T09:58:54.514273+00:00] test1: Test event 1
+  Seal: 0d5d448d94c2e2f230964dec1d7f342ee4d50a0323bdb3be54139a6e1a15f18b
+
+[2025-08-28T09:58:54.513681+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: c187c648c416d7923b91378cd42d7ff8496cb41a675ba42de0a3aa7e323761eb
+
+[2025-08-28T09:58:54.512116+00:00] ceiling_update: Ceiling updated for task_priority: 100 → 200
+  Data: {
+  "value_type": "task_priority",
+  "old_ceiling": 100,
+  "new_ceiling": 200
+}
+  Seal: f7c1fa0954f6ea9502aa7e95f86c12ae3d135e3e9104e51f5bc88814526bfe0b
+
+[2025-08-28T09:58:54.511638+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: 8d6d54cc60070539d00fb760426bbd266251bfcc1792123f36cc8be959e0c957
+
+[2025-08-28T09:58:54.509074+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 5c7488f79d8fe77e8d6c935dc1127abc592ff6ebe16f079b83f96a9de696f78e
+
+[2025-08-28T09:58:54.508587+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: 54938d4eec9f19c3bd4ca61e32dec46db5db07448fef10af168d24c70705fd86
+
+[2025-08-28T09:58:54.506567+00:00] test: Test event
+  Data: {
+  "test_data": "value"
+}
+  Seal: 2b7bd738ea8f584c49a6f54aef279ed3b98b09654a8b6b409657f431788d4c55
+
+[2025-08-28T09:58:54.505554+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375134
+  Seal: d211266383aff7cf51409b8da699e33bf64bb330d64d073b6321fe77be354569
+
+[2025-08-28T09:58:37.063405+00:00] other_event: Other event
+  Seal: e09df4ad18feeb34480e616d587402265337e317feddd000bbbfb8999737dbdc
+
+[2025-08-28T09:58:37.063299+00:00] filter_test_2: Filter test event 2
+  Seal: fb569f1b7c208dc6b5af01ebdd6d96ad95c2ed8ff330a6af1cb2a72310db6c4b
+
+[2025-08-28T09:58:37.063218+00:00] filter_test_1: Filter test event 1
+  Seal: c9fb1a18fdbdee70624d0bf9983db89159f358979f7984ebb51c8ec007d53e52
+
+[2025-08-28T09:58:37.062763+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: c04237edef4b3106626217dd25f9d4015a3f292414386acb9d181ba2c5ffd697
+
+[2025-08-28T09:58:37.056892+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: a7bcfb921d41bf7bc77906dffe54d489eb066970c02394e352d9b27f57106895
+
+[2025-08-28T09:58:37.056362+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: 535f6380b6d00e466a73415228d1f58eb92e1829a29afdc0e5df479e879d309e
+
+[2025-08-28T09:58:37.053779+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: 2141549009b6bd4b7ccfd5702746f4b0e94418f361f1ae669dbb037cd4b5348c
+
+[2025-08-28T09:58:37.048693+00:00] ceiling_update: Ceiling updated for resource_allocation: 100 → 150
+  Data: {
+  "value_type": "resource_allocation",
+  "old_ceiling": 100,
+  "new_ceiling": 150
+}
+  Seal: cde3a6abe3e38e52f4270d0ca6e7aff4664f414dca1bcd66883588dabf882c68
+
+[2025-08-28T09:58:37.048196+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 5469b499799d9e506b2024f326dcd161eb532369842b3ffdb2ca9b757879d13e
+
+[2025-08-28T09:58:37.048088+00:00] sequence: Starting sequence test
+  Seal: 4f35fdf30f317b28deb6363fa1910127dfb49e931ed500f1b030d020906a7948
+
+[2025-08-28T09:58:37.047376+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: da549aa0d1b720024dd4a8b5fbca74400f470bb512156385f1c9c80c6a838be2
+
+[2025-08-28T09:58:37.041257+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: 38a6e568352684e08f8d9c32b90b19d9f0382f019b8d095638e52158dad76b1a
+
+[2025-08-28T09:58:37.034760+00:00] test3: Test event 3
+  Seal: 4ced558088c96647b1c4ed0aff141b3f022b80c818d641ca5d77670653f7d8c8
+
+[2025-08-28T09:58:37.034675+00:00] test2: Test event 2
+  Seal: a30edeb86b6b5df88b082d6c5eab6880a0d365c2053cf30c81ac48c558cff716
+
+[2025-08-28T09:58:37.034565+00:00] test1: Test event 1
+  Seal: aff7a81a9edf1b0341ba3f07e67ddf86e2b935aebec1d8f54bbaa97748089c0d
+
+[2025-08-28T09:58:37.033828+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: 256c6a1e339855988bb880c1e3aa16f3b4dc8752149b3d5558f3d08722597c19
+
+[2025-08-28T09:58:37.031898+00:00] ceiling_update: Ceiling updated for task_priority: 100 → 200
+  Data: {
+  "value_type": "task_priority",
+  "old_ceiling": 100,
+  "new_ceiling": 200
+}
+  Seal: cf5edf08e7907c541caf01a2f7edc3993d8cc67ec87b455efca373e89960f569
+
+[2025-08-28T09:58:37.031162+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: cf788a407a34b7f7d8bd1398f15d85ad09fbd796dab454e8ffbcb998542dc695
+
+[2025-08-28T09:58:37.028548+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: c5e480ec62531c46bbe8d45e75b908a9b9a26a8d3b492a04f60f1b37668cb7ac
+
+[2025-08-28T09:58:37.028028+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: fb82a45989986c9c499c9315a1e8c24cecdb73a2a8d95a2bffa649fa31737f8a
+
+[2025-08-28T09:58:37.026041+00:00] test: Test event
+  Data: {
+  "test_data": "value"
+}
+  Seal: edc965b8b185e8e8247eb2c1c00fb6b55be98c90ef42b1cd18b221ac8ba70ac2
+
+[2025-08-28T09:58:37.025245+00:00] gbtepoch_init: Initialized GBTEpoch reference at 1756375117
+  Seal: 26f2744b77d3c9baa7e05dbfed91e54fdeb069e173fd79b410acbfd1c7256549
+
+[2025-08-28T09:57:21.686833+00:00] other_event: Other event
+  Seal: 7d15cc6f298ac9619b1b256f36270fadb0c60751693675a3e2d15d4d315af995
+
+[2025-08-28T09:57:21.686752+00:00] filter_test_2: Filter test event 2
+  Seal: 8bf20589df9e0ff3c2fd4971947dd5c945d05fbdee820046120b753b60cdedfd
+
+==============================
+Scroll Seal: 2587ecab8c4daa2be85dac8c0228998e41b3fea64a271f92ee712009c31e0e6b

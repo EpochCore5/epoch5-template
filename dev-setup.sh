@@ -50,6 +50,15 @@ else
     echo "⚠️  Pre-commit not found, skipping hook installation"
 fi
 
+# Create necessary directories
+echo
+echo "📁 Creating required directories..."
+mkdir -p ./archive/EPOCH5/agents
+mkdir -p ./archive/EPOCH5/cycles
+mkdir -p ./archive/EPOCH5/logs/strategydeck
+mkdir -p ./archive/EPOCH5/capsules
+echo "✅ Directories created"
+
 # Run initial tests
 echo
 echo "🧪 Running initial tests..."
@@ -65,20 +74,41 @@ echo "🎯 Setting up demo environment..."
 python3 integration.py setup-demo > /dev/null 2>&1
 echo "✅ Demo environment ready"
 
+# Set up StrategyDECK agent
+echo
+echo "🤖 Setting up StrategyDECK agent..."
+if python3 -c "from strategydeck_integration import StrategyDECKAgentIntegration; \
+    integration = StrategyDECKAgentIntegration(); \
+    integration.register_agent(); \
+    print('✅ StrategyDECK agent registered')"; then
+    echo "✅ StrategyDECK agent setup complete"
+else
+    echo "⚠️  StrategyDECK agent setup encountered issues, but continuing"
+fi
+
 # Check system status
 echo
 echo "📊 Checking system status..."
 python3 integration.py status | head -5
 
+# Display StrategyDECK agent test command
+echo
+echo "🔍 To test StrategyDECK agent functionality, run:"
+echo "   python3 strategydeck_agent.py"
+echo "   or"
+echo "   make strategydeck"
+
 echo
 echo "🎉 Development setup complete!"
 echo
 echo "Next steps:"
-echo "  1. Run tests:           pytest"
-echo "  2. Format code:         black ."
-echo "  3. Check linting:       flake8 ."
-echo "  4. System demo:         python3 integration.py run-workflow"
-echo "  5. Launch dashboard:    bash ceiling_launcher.sh"
+echo "  1. Run tests:                pytest"
+echo "  2. Format code:              black ."
+echo "  3. Check linting:            flake8 ."
+echo "  4. System demo:              python3 integration.py run-workflow"
+echo "  5. Launch dashboard:         bash ceiling_launcher.sh"
+echo "  6. Test StrategyDECK agent:  python3 strategydeck_agent.py"
+echo "  7. StrategyDECK integration: python3 strategydeck_integration.py status"
 echo
 echo "For detailed documentation, see DEVELOPMENT.md"
 echo

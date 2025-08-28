@@ -1,0 +1,139 @@
+name: Test Coverage Report in PR
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  coverage-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov coverage-badge tabulate
+      
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=. --cov-report=xml --cov-report=term-missing --cov-report=term:skip-covered
+      
+      - name: Extract current coverage percentage
+        run: |
+          echo "COVERAGE_PCT=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(float(root.attrib['line-rate']) * 100)")" >> $GITHUB_ENV
+          echo "Current coverage: ${{ env.COVERAGE_PCT }}%"
+      
+      - name: Get coverage from base branch
+        run: |
+          git checkout ${{ github.base_ref }}
+          pytest --cov=. --cov-report=xml:base_coverage.xml
+          echo "BASE_COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('base_coverage.xml'); root = tree.getroot(); print(float(root.attrib['line-rate']) * 100)")" >> $GITHUB_ENV
+          echo "Base branch coverage: ${{ env.BASE_COVERAGE }}%"
+          
+          # Compute the difference
+          python -c "
+          current = float('${{ env.COVERAGE_PCT }}')
+          base = float('${{ env.BASE_COVERAGE }}')
+          diff = current - base
+          print(f'Difference: {diff:.2f}%')
+          with open('coverage_diff.txt', 'w') as f:
+              if diff > 0:
+                  f.write(f'+{diff:.2f}%')
+              else:
+                  f.write(f'{diff:.2f}%')
+          "
+          echo "COVERAGE_DIFF=$(cat coverage_diff.txt)" >> $GITHUB_ENV
+      
+      - name: Generate file-level coverage report
+        run: |
+          git checkout ${{ github.event.pull_request.head.sha }}
+          python -c "
+          import xml.etree.ElementTree as ET
+          from tabulate import tabulate
+          
+          # Load current coverage data
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          
+          # Create a dictionary with current coverage data by file
+          current_coverage = {}
+          for cls in root.findall('.//class'):
+              filename = cls.attrib['filename']
+              if not filename.startswith('test_') and '/tests/' not in filename:
+                  current_coverage[filename] = float(cls.attrib['line-rate']) * 100
+          
+          # Load base coverage data
+          base_tree = ET.parse('base_coverage.xml')
+          base_root = base_tree.getroot()
+          
+          # Create a dictionary with base coverage data by file
+          base_coverage = {}
+          for cls in base_root.findall('.//class'):
+              filename = cls.attrib['filename']
+              if not filename.startswith('test_') and '/tests/' not in filename:
+                  base_coverage[filename] = float(cls.attrib['line-rate']) * 100
+          
+          # Prepare data for the report
+          report_data = []
+          for filename in sorted(set(list(current_coverage.keys()) + list(base_coverage.keys()))):
+              current_cov = current_coverage.get(filename, 0)
+              base_cov = base_coverage.get(filename, 0)
+              diff = current_cov - base_cov
+              
+              # Format the diff as string with + or - sign
+              if diff > 0:
+                  diff_str = f'+{diff:.2f}%'
+              else:
+                  diff_str = f'{diff:.2f}%'
+              
+              report_data.append([
+                  filename,
+                  f'{base_cov:.2f}%',
+                  f'{current_cov:.2f}%',
+                  diff_str
+              ])
+          
+          # Sort by coverage difference (descending)
+          report_data.sort(key=lambda x: float(x[3].rstrip('%')), reverse=True)
+          
+          # Generate the report
+          headers = ['File', 'Base Coverage', 'Current Coverage', 'Difference']
+          table = tabulate(report_data, headers=headers, tablefmt='pipe')
+          
+          with open('coverage_report.md', 'w') as f:
+              f.write(table)
+          " 
+      
+      - name: Comment PR with coverage report
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: test-coverage-report
+          message: |
+            ## Test Coverage Report
+            
+            | Current | Base | Difference |
+            |---------|------|------------|
+            | ${{ env.COVERAGE_PCT }}% | ${{ env.BASE_COVERAGE }}% | ${{ env.COVERAGE_DIFF }} |
+            
+            ### Coverage by File
+            
+            $(cat coverage_report.md)
+            
+            ${
+              parseFloat(process.env.COVERAGE_PCT) < 80 
+              ? '⚠️ **Coverage is below the 80% target**' 
+              : '✅ **Coverage meets or exceeds the 80% target**'
+            }

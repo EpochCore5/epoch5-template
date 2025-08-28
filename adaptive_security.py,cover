@@ -1,0 +1,1171 @@
+  #!/usr/bin/env python3
+> """
+> EPOCH5 Adaptive Security Learning System
+> Implements ML-based security pattern recognition and autonomous response enhancement
+> Uses reinforcement learning to continuously improve security posture
+> Integrates with ceiling management and self-healing systems
+> """
+  
+! import json
+! import time
+! import numpy as np
+! import logging
+! import threading
+! import hashlib
+! import os
+! from datetime import datetime, timezone, timedelta
+! from typing import Dict, List, Any, Optional, Tuple, Union
+! from pathlib import Path
+! import random
+! from collections import deque
+  
+  # Configure logging
+! logging.basicConfig(
+!     level=logging.INFO,
+!     format='%(asctime)s [%(levelname)s] %(message)s',
+!     handlers=[
+!         logging.FileHandler("epoch5_adaptive_security.log"),
+!         logging.StreamHandler()
+!     ]
+! )
+  
+! class SecurityViolation:
+!     """Representation of a security violation event"""
+!     def __init__(self, violation_type: str, severity: str, timestamp: str, 
+!                 details: Dict[str, Any], source: str):
+!         self.violation_type = violation_type
+!         self.severity = severity
+!         self.timestamp = timestamp
+!         self.details = details
+!         self.source = source
+!         self.response_actions = []
+!         self.outcome = None  # Will be set after response
+          
+!     def to_dict(self) -> Dict[str, Any]:
+!         """Convert violation to dictionary"""
+!         return {
+!             "violation_type": self.violation_type,
+!             "severity": self.severity,
+!             "timestamp": self.timestamp,
+!             "details": self.details,
+!             "source": self.source,
+!             "response_actions": self.response_actions,
+!             "outcome": self.outcome
+!         }
+      
+!     def add_response(self, action: str, result: Dict[str, Any]):
+!         """Add a response action taken for this violation"""
+!         self.response_actions.append({
+!             "action": action,
+!             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+!             "result": result
+!         })
+      
+!     def set_outcome(self, outcome: str, effectiveness: float, details: Dict[str, Any]):
+!         """Set the outcome of the response actions"""
+!         self.outcome = {
+!             "status": outcome,
+!             "effectiveness": effectiveness,
+!             "details": details,
+!             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+!         }
+  
+  
+! class ResponseAction:
+!     """Represents a possible response action to security violations"""
+!     def __init__(self, name: str, action_type: str, description: str, 
+!                 effectiveness: Dict[str, float], impact: float):
+!         self.name = name
+!         self.action_type = action_type  # e.g., "block", "throttle", "log", "alert"
+!         self.description = description
+!         self.effectiveness = effectiveness  # Maps violation_type to effectiveness score
+!         self.impact = impact  # Business impact score (higher = more disruptive)
+!         self.usage_count = 0
+!         self.success_count = 0
+      
+!     def to_dict(self) -> Dict[str, Any]:
+!         """Convert action to dictionary"""
+!         return {
+!             "name": self.name,
+!             "action_type": self.action_type,
+!             "description": self.description,
+!             "effectiveness": self.effectiveness,
+!             "impact": self.impact,
+!             "usage_count": self.usage_count,
+!             "success_count": self.success_count,
+!             "success_rate": self.success_rate
+!         }
+      
+!     @property
+!     def success_rate(self) -> float:
+!         """Calculate success rate of this action"""
+!         if self.usage_count == 0:
+!             return 0.0
+!         return self.success_count / self.usage_count
+  
+  
+! class AdaptiveSecurityEngine:
+!     def __init__(self, base_dir: str = "./archive/EPOCH5"):
+!         self.base_dir = Path(base_dir)
+!         self.security_dir = self.base_dir / "adaptive_security"
+!         self.security_dir.mkdir(parents=True, exist_ok=True)
+          
+          # Storage paths
+!         self.violations_file = self.security_dir / "violations_history.json"
+!         self.actions_file = self.security_dir / "response_actions.json"
+!         self.learning_file = self.security_dir / "learning_model.json"
+!         self.config_file = self.security_dir / "adaptive_config.json"
+          
+          # Initialize configuration
+!         self._initialize_config()
+          
+          # Load available response actions
+!         self.available_actions = self._load_or_init_actions()
+          
+          # Violation history with deque for fast access to recent items
+!         self.violations_history = deque(maxlen=1000)
+!         self._load_violations_history()
+          
+          # Learning state
+!         self.action_effectiveness = {}  # Maps action+violation_type to effectiveness score
+!         self.violation_patterns = {}    # Maps violation patterns to frequency
+!         self.state_action_rewards = {}  # Q-learning state-action rewards
+!         self._load_learning_state()
+          
+          # Runtime state
+!         self.is_monitoring = False
+!         self.monitor_thread = None
+!         self.learning_thread = None
+!         self.is_learning = False
+          
+          # Statistics
+!         self.stats = {
+!             "violations_detected": 0,
+!             "successful_mitigations": 0,
+!             "failed_mitigations": 0,
+!             "false_positives": 0,
+!             "training_cycles": 0,
+!             "model_accuracy": 0.0,
+!             "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+!         }
+      
+!     def timestamp(self) -> str:
+!         """Generate ISO timestamp consistent with EPOCH5"""
+!         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+      
+!     def sha256(self, data: str) -> str:
+!         """Generate SHA256 hash consistent with EPOCH5"""
+!         return hashlib.sha256(data.encode("utf-8")).hexdigest()
+      
+!     def _initialize_config(self):
+!         """Initialize default configuration"""
+!         if not self.config_file.exists():
+!             default_config = {
+!                 "monitoring_interval": 30,  # seconds
+!                 "learning_interval": 3600,  # seconds (hourly)
+!                 "auto_response": True,      # Automatically respond to violations
+!                 "learning_parameters": {
+!                     "learning_rate": 0.1,    # Alpha
+!                     "discount_factor": 0.9,  # Gamma
+!                     "exploration_rate": 0.2  # Epsilon
+!                 },
+!                 "response_thresholds": {
+!                     "low": 0.3,      # Confidence threshold for low severity
+!                     "medium": 0.5,   # Confidence threshold for medium severity
+!                     "high": 0.7,     # Confidence threshold for high severity
+!                     "critical": 0.9  # Confidence threshold for critical severity
+!                 },
+!                 "pattern_detection": {
+!                     "time_window": 3600,     # Time window for pattern detection (seconds)
+!                     "min_occurrences": 3,    # Minimum occurrences to recognize a pattern
+!                     "correlation_threshold": 0.7  # Threshold for correlating events
+!                 },
+!                 "created_at": self.timestamp(),
+!                 "last_modified": self.timestamp()
+!             }
+!             with open(self.config_file, "w") as f:
+!                 json.dump(default_config, f, indent=2)
+!             self.config = default_config
+!         else:
+!             with open(self.config_file, "r") as f:
+!                 self.config = json.load(f)
+      
+!     def _load_or_init_actions(self) -> Dict[str, ResponseAction]:
+!         """Load available response actions or initialize defaults"""
+!         if self.actions_file.exists():
+!             with open(self.actions_file, "r") as f:
+!                 actions_data = json.load(f)
+!                 actions = {}
+!                 for name, data in actions_data.items():
+!                     action = ResponseAction(
+!                         name=name,
+!                         action_type=data["action_type"],
+!                         description=data["description"],
+!                         effectiveness=data["effectiveness"],
+!                         impact=data["impact"]
+!                     )
+!                     action.usage_count = data.get("usage_count", 0)
+!                     action.success_count = data.get("success_count", 0)
+!                     actions[name] = action
+!                 return actions
+!         else:
+              # Initialize default actions
+!             actions = {
+!                 "block_ip": ResponseAction(
+!                     name="block_ip",
+!                     action_type="block",
+!                     description="Block offending IP address",
+!                     effectiveness={
+!                         "brute_force": 0.9,
+!                         "api_abuse": 0.7,
+!                         "data_exfiltration": 0.5,
+!                         "ceiling_violation": 0.3
+!                     },
+!                     impact=0.8
+!                 ),
+!                 "rate_limit": ResponseAction(
+!                     name="rate_limit",
+!                     action_type="throttle",
+!                     description="Apply rate limiting to the source",
+!                     effectiveness={
+!                         "brute_force": 0.7,
+!                         "api_abuse": 0.9,
+!                         "data_exfiltration": 0.6,
+!                         "ceiling_violation": 0.8
+!                     },
+!                     impact=0.5
+!                 ),
+!                 "step_up_auth": ResponseAction(
+!                     name="step_up_auth",
+!                     action_type="authentication",
+!                     description="Require additional authentication",
+!                     effectiveness={
+!                         "brute_force": 0.8,
+!                         "api_abuse": 0.5,
+!                         "data_exfiltration": 0.7,
+!                         "ceiling_violation": 0.2
+!                     },
+!                     impact=0.4
+!                 ),
+!                 "alert_admin": ResponseAction(
+!                     name="alert_admin",
+!                     action_type="notification",
+!                     description="Send alert to administrator",
+!                     effectiveness={
+!                         "brute_force": 0.3,
+!                         "api_abuse": 0.3,
+!                         "data_exfiltration": 0.4,
+!                         "ceiling_violation": 0.3
+!                     },
+!                     impact=0.1
+!                 ),
+!                 "encrypt_data": ResponseAction(
+!                     name="encrypt_data",
+!                     action_type="protection",
+!                     description="Apply additional encryption to sensitive data",
+!                     effectiveness={
+!                         "brute_force": 0.1,
+!                         "api_abuse": 0.2,
+!                         "data_exfiltration": 0.8,
+!                         "ceiling_violation": 0.1
+!                     },
+!                     impact=0.3
+!                 ),
+!                 "reduce_ceiling": ResponseAction(
+!                     name="reduce_ceiling",
+!                     action_type="limitation",
+!                     description="Temporarily reduce ceiling values",
+!                     effectiveness={
+!                         "brute_force": 0.2,
+!                         "api_abuse": 0.6,
+!                         "data_exfiltration": 0.5,
+!                         "ceiling_violation": 0.9
+!                     },
+!                     impact=0.7
+!                 ),
+!                 "terminate_session": ResponseAction(
+!                     name="terminate_session",
+!                     action_type="session",
+!                     description="Force terminate user session",
+!                     effectiveness={
+!                         "brute_force": 0.8,
+!                         "api_abuse": 0.7,
+!                         "data_exfiltration": 0.9,
+!                         "ceiling_violation": 0.4
+!                     },
+!                     impact=0.6
+!                 ),
+!                 "log_forensics": ResponseAction(
+!                     name="log_forensics",
+!                     action_type="monitoring",
+!                     description="Increase logging detail for forensic analysis",
+!                     effectiveness={
+!                         "brute_force": 0.4,
+!                         "api_abuse": 0.5,
+!                         "data_exfiltration": 0.6,
+!                         "ceiling_violation": 0.5
+!                     },
+!                     impact=0.2
+!                 )
+!             }
+              
+              # Save initial actions
+!             self._save_actions(actions)
+!             return actions
+      
+!     def _save_actions(self, actions: Dict[str, ResponseAction]):
+!         """Save response actions to file"""
+!         actions_data = {name: action.to_dict() for name, action in actions.items()}
+!         with open(self.actions_file, "w") as f:
+!             json.dump(actions_data, f, indent=2)
+      
+!     def _load_violations_history(self):
+!         """Load violation history from file"""
+!         if self.violations_file.exists():
+!             with open(self.violations_file, "r") as f:
+!                 violations_data = json.load(f)
+                  
+                  # Convert to SecurityViolation objects and add to deque
+!                 for v_data in violations_data:
+!                     violation = SecurityViolation(
+!                         violation_type=v_data["violation_type"],
+!                         severity=v_data["severity"],
+!                         timestamp=v_data["timestamp"],
+!                         details=v_data["details"],
+!                         source=v_data["source"]
+!                     )
+                      
+                      # Add response actions if any
+!                     if "response_actions" in v_data:
+!                         violation.response_actions = v_data["response_actions"]
+                      
+                      # Add outcome if any
+!                     if "outcome" in v_data:
+!                         violation.outcome = v_data["outcome"]
+                      
+!                     self.violations_history.append(violation)
+      
+!     def _save_violations_history(self):
+!         """Save violation history to file"""
+!         violations_data = [v.to_dict() for v in self.violations_history]
+!         with open(self.violations_file, "w") as f:
+!             json.dump(violations_data, f, indent=2)
+      
+!     def _load_learning_state(self):
+!         """Load learning state from file"""
+!         if self.learning_file.exists():
+!             with open(self.learning_file, "r") as f:
+!                 learning_data = json.load(f)
+!                 self.action_effectiveness = learning_data.get("action_effectiveness", {})
+!                 self.violation_patterns = learning_data.get("violation_patterns", {})
+!                 self.state_action_rewards = learning_data.get("state_action_rewards", {})
+!                 self.stats = learning_data.get("stats", self.stats)
+      
+!     def _save_learning_state(self):
+!         """Save learning state to file"""
+!         learning_data = {
+!             "action_effectiveness": self.action_effectiveness,
+!             "violation_patterns": self.violation_patterns,
+!             "state_action_rewards": self.state_action_rewards,
+!             "stats": self.stats,
+!             "last_updated": self.timestamp()
+!         }
+!         with open(self.learning_file, "w") as f:
+!             json.dump(learning_data, f, indent=2)
+      
+!     def _get_state_key(self, violation: SecurityViolation) -> str:
+!         """Create a state key for Q-learning based on violation characteristics"""
+!         return f"{violation.violation_type}:{violation.severity}:{violation.source}"
+      
+!     def _select_response_action(self, violation: SecurityViolation) -> str:
+!         """Select the best response action using reinforcement learning"""
+!         state_key = self._get_state_key(violation)
+          
+          # Exploration vs exploitation
+!         if random.random() < self.config["learning_parameters"]["exploration_rate"]:
+              # Exploration: try a random action
+!             action_name = random.choice(list(self.available_actions.keys()))
+!             logging.info(f"Exploration: selected random action {action_name}")
+!             return action_name
+          
+          # Exploitation: choose best action based on learned rewards
+!         if state_key in self.state_action_rewards:
+!             state_actions = self.state_action_rewards[state_key]
+!             if state_actions:
+                  # Find action with highest reward
+!                 best_action = max(state_actions.items(), key=lambda x: x[1])[0]
+!                 logging.info(f"Exploitation: selected best action {best_action} with reward {state_actions[best_action]}")
+!                 return best_action
+          
+          # Fallback to heuristic if no learned rewards
+          # Choose based on pre-defined effectiveness for this violation type
+!         best_action = None
+!         best_score = -1
+          
+          # Calculate confidence threshold based on severity
+!         threshold = self.config["response_thresholds"].get(
+!             violation.severity.lower(), 0.5)
+          
+!         for name, action in self.available_actions.items():
+              # Get effectiveness for this violation type
+!             score = action.effectiveness.get(violation.violation_type, 0.3)
+              
+              # Adjust by success rate if we have usage history
+!             if action.usage_count > 0:
+!                 score = (score + action.success_rate) / 2
+              
+              # Penalize high-impact actions for low severity violations
+!             if violation.severity.lower() in ["low", "medium"] and action.impact > 0.7:
+!                 score *= 0.7
+              
+!             if score > best_score and score >= threshold:
+!                 best_score = score
+!                 best_action = name
+          
+          # If no action meets threshold, use lowest impact action
+!         if best_action is None:
+!             best_action = min(self.available_actions.items(), key=lambda x: x[1].impact)[0]
+!             logging.info(f"No action met threshold, using lowest impact action {best_action}")
+!         else:
+!             logging.info(f"Heuristic: selected action {best_action} with score {best_score}")
+          
+!         return best_action
+      
+!     def _update_action_reward(self, state_key: str, action: str, reward: float):
+!         """Update Q-value for state-action pair"""
+!         alpha = self.config["learning_parameters"]["learning_rate"]
+          
+          # Initialize state-action dictionary if needed
+!         if state_key not in self.state_action_rewards:
+!             self.state_action_rewards[state_key] = {}
+          
+          # Initialize action value if needed
+!         if action not in self.state_action_rewards[state_key]:
+!             self.state_action_rewards[state_key][action] = 0.0
+          
+          # Update using Q-learning update rule
+!         current_value = self.state_action_rewards[state_key][action]
+!         self.state_action_rewards[state_key][action] = current_value + alpha * (reward - current_value)
+          
+!         logging.info(f"Updated reward for {state_key} -> {action}: {current_value} -> {self.state_action_rewards[state_key][action]}")
+      
+!     def _execute_response(self, violation: SecurityViolation, action_name: str) -> Dict[str, Any]:
+!         """Execute a response action (simulated)"""
+!         if action_name not in self.available_actions:
+!             return {"status": "error", "message": f"Unknown action: {action_name}"}
+          
+!         action = self.available_actions[action_name]
+          
+          # Update usage count
+!         action.usage_count += 1
+          
+          # Simulate action execution
+!         time.sleep(random.uniform(0.1, 1.0))  # Simulate processing time
+          
+          # Determine success based on effectiveness for this violation type
+!         base_effectiveness = action.effectiveness.get(violation.violation_type, 0.3)
+!         success_chance = base_effectiveness * (0.8 + random.random() * 0.4)  # Add some randomness
+          
+!         success = random.random() < success_chance
+          
+!         if success:
+!             action.success_count += 1
+!             result = {
+!                 "status": "success",
+!                 "message": f"Successfully executed {action_name} response",
+!                 "details": {
+!                     "execution_time": random.uniform(0.1, 2.0),
+!                     "effectiveness_score": base_effectiveness,
+!                     "action_impact": action.impact
+!                 }
+!             }
+!         else:
+!             result = {
+!                 "status": "failure",
+!                 "message": f"Failed to execute {action_name} response",
+!                 "details": {
+!                     "execution_time": random.uniform(0.1, 2.0),
+!                     "effectiveness_score": base_effectiveness,
+!                     "action_impact": action.impact,
+!                     "reason": random.choice([
+!                         "target unavailable", 
+!                         "insufficient permissions",
+!                         "resource constraint",
+!                         "action timeout"
+!                     ])
+!                 }
+!             }
+          
+          # Save actions
+!         self._save_actions(self.available_actions)
+          
+!         return result
+      
+!     def detect_and_respond_to_violations(self):
+!         """Main monitoring loop to detect and respond to violations"""
+!         self.is_monitoring = True
+!         logging.info("Starting security violation monitoring")
+          
+!         try:
+!             while self.is_monitoring:
+                  # In a real system, we would be actively monitoring for violations
+                  # Here we'll simulate by occasionally generating random violations
+!                 if random.random() < 0.3:  # 30% chance of detecting a violation each cycle
+!                     violation = self._simulate_violation()
+!                     self.process_violation(violation)
+                  
+                  # Sleep before next check
+!                 time.sleep(self.config["monitoring_interval"])
+          
+!         except Exception as e:
+!             logging.error(f"Error in security monitoring: {str(e)}")
+!             self.is_monitoring = False
+      
+!     def _simulate_violation(self) -> SecurityViolation:
+!         """Simulate a security violation for testing/demo"""
+!         violation_types = ["brute_force", "api_abuse", "data_exfiltration", "ceiling_violation"]
+!         severities = ["low", "medium", "high", "critical"]
+!         sources = ["api_gateway", "user_auth", "data_access", "agent_execution", "ceiling_manager"]
+          
+!         violation_type = random.choice(violation_types)
+!         severity = random.choice(severities)
+!         source = random.choice(sources)
+          
+          # Generate appropriate details based on violation type
+!         details = {}
+!         if violation_type == "brute_force":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "user_agent": random.choice(["Mozilla/5.0", "Python-requests/2.25.1", "curl/7.68.0"]),
+!                 "attempts": random.randint(5, 50),
+!                 "target_user": f"user{random.randint(1, 1000)}"
+!             }
+!         elif violation_type == "api_abuse":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "endpoint": f"/api/v1/{random.choice(['users', 'data', 'reports', 'config'])}",
+!                 "rate": random.randint(100, 1000),
+!                 "threshold": random.randint(50, 200)
+!             }
+!         elif violation_type == "data_exfiltration":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "data_type": random.choice(["user_data", "configuration", "logs", "credentials"]),
+!                 "volume_mb": random.uniform(10, 500),
+!                 "destination": f"external-{random.randint(1, 100)}.example.com"
+!             }
+!         elif violation_type == "ceiling_violation":
+!             ceiling_types = ["budget", "latency", "trust_threshold", "success_rate", "rate_limit"]
+!             details = {
+!                 "ceiling_type": random.choice(ceiling_types),
+!                 "config_id": f"config-{random.randint(1, 20)}",
+!                 "attempted_value": random.uniform(100, 1000),
+!                 "ceiling_value": random.uniform(50, 500),
+!                 "user_id": f"user{random.randint(1, 1000)}"
+!             }
+          
+!         violation = SecurityViolation(
+!             violation_type=violation_type,
+!             severity=severity,
+!             timestamp=self.timestamp(),
+!             details=details,
+!             source=source
+!         )
+          
+!         logging.info(f"Simulated {severity} {violation_type} violation from {source}")
+!         return violation
+      
+!     def process_violation(self, violation: SecurityViolation):
+!         """Process a security violation"""
+          # Add to history
+!         self.violations_history.append(violation)
+!         self.stats["violations_detected"] += 1
+          
+          # Check for auto-response
+!         if self.config["auto_response"]:
+              # Select best action
+!             action_name = self._select_response_action(violation)
+              
+              # Execute response
+!             result = self._execute_response(violation, action_name)
+              
+              # Record response
+!             violation.add_response(action_name, result)
+              
+              # Determine outcome
+!             success = result["status"] == "success"
+!             effectiveness = 0.0
+              
+!             if success:
+!                 effectiveness = random.uniform(0.7, 1.0)
+!                 outcome = "mitigated"
+!                 self.stats["successful_mitigations"] += 1
+!             else:
+!                 effectiveness = random.uniform(0.0, 0.4)
+!                 outcome = "failed"
+!                 self.stats["failed_mitigations"] += 1
+              
+              # 5% chance of false positive
+!             if random.random() < 0.05:
+!                 outcome = "false_positive"
+!                 self.stats["false_positives"] += 1
+              
+              # Set outcome
+!             violation.set_outcome(
+!                 outcome=outcome,
+!                 effectiveness=effectiveness,
+!                 details={"auto_response": True, "action": action_name}
+!             )
+              
+              # Calculate reward for reinforcement learning
+!             reward = self._calculate_reward(violation, action_name, effectiveness, outcome)
+              
+              # Update Q-values
+!             state_key = self._get_state_key(violation)
+!             self._update_action_reward(state_key, action_name, reward)
+          
+          # Update files
+!         self._save_violations_history()
+!         self._save_learning_state()
+          
+!         logging.info(f"Processed violation: {violation.violation_type} from {violation.source}")
+!         return violation
+      
+!     def _calculate_reward(self, violation: SecurityViolation, action_name: str, 
+!                          effectiveness: float, outcome: str) -> float:
+!         """Calculate reward for reinforcement learning"""
+!         action = self.available_actions[action_name]
+          
+          # Base reward from effectiveness
+!         reward = effectiveness
+          
+          # Penalize high-impact actions for low severity or false positives
+!         if violation.severity.lower() in ["low", "medium"]:
+!             reward -= action.impact * 0.3
+          
+!         if outcome == "false_positive":
+!             reward = -1.0  # Strong penalty for false positives
+          
+!         return max(-1.0, min(1.0, reward))  # Clamp reward between -1 and 1
+      
+!     def run_learning_cycle(self):
+!         """Run a learning cycle to improve the model"""
+!         self.is_learning = True
+!         logging.info("Starting adaptive security learning cycle")
+          
+!         try:
+!             while self.is_learning:
+                  # Update pattern detection
+!                 self._update_violation_patterns()
+                  
+                  # Update action effectiveness based on outcomes
+!                 self._update_action_effectiveness()
+                  
+                  # Run simulations to test and improve model
+!                 self._run_training_simulations()
+                  
+                  # Update stats
+!                 self.stats["training_cycles"] += 1
+!                 self.stats["last_updated"] = self.timestamp()
+!                 self._save_learning_state()
+                  
+                  # Sleep until next learning cycle
+!                 time.sleep(self.config["learning_interval"])
+          
+!         except Exception as e:
+!             logging.error(f"Error in learning cycle: {str(e)}")
+!             self.is_learning = False
+      
+!     def _update_violation_patterns(self):
+!         """Update violation patterns based on historical data"""
+          # Look for temporal patterns in violation history
+!         if len(self.violations_history) < 5:
+!             return
+          
+          # Get violations within time window
+!         time_window = self.config["pattern_detection"]["time_window"]
+!         now = datetime.now(timezone.utc)
+!         recent_violations = [v for v in self.violations_history 
+!                             if (now - datetime.fromisoformat(v.timestamp.replace('Z', '+00:00'))).total_seconds() < time_window]
+          
+          # Group by type and source
+!         groups = {}
+!         for v in recent_violations:
+!             key = f"{v.violation_type}:{v.source}"
+!             if key not in groups:
+!                 groups[key] = []
+!             groups[key].append(v)
+          
+          # Find patterns with minimum occurrences
+!         min_occurrences = self.config["pattern_detection"]["min_occurrences"]
+!         for key, violations in groups.items():
+!             if len(violations) >= min_occurrences:
+                  # Create pattern signature
+!                 signature = f"{key}:{len(violations)}"
+                  
+                  # Update pattern count
+!                 if signature not in self.violation_patterns:
+!                     self.violation_patterns[signature] = {
+!                         "count": 0,
+!                         "first_seen": self.timestamp(),
+!                         "last_seen": self.timestamp()
+!                     }
+                  
+!                 self.violation_patterns[signature]["count"] += 1
+!                 self.violation_patterns[signature]["last_seen"] = self.timestamp()
+                  
+!                 logging.info(f"Detected pattern: {key} with {len(violations)} occurrences")
+      
+!     def _update_action_effectiveness(self):
+!         """Update action effectiveness based on violation outcomes"""
+          # Look at recent violations with responses and outcomes
+!         recent_violations = [v for v in self.violations_history 
+!                            if v.response_actions and v.outcome]
+          
+!         if not recent_violations:
+!             return
+          
+          # Update effectiveness for each action and violation type
+!         for violation in recent_violations:
+!             for response in violation.response_actions:
+!                 action_name = response["action"]
+!                 if action_name in self.available_actions:
+!                     action = self.available_actions[action_name]
+                      
+                      # Update effectiveness based on outcome
+!                     if violation.outcome:
+!                         effectiveness = violation.outcome.get("effectiveness", 0.0)
+                          
+                          # Create key for tracking
+!                         key = f"{action_name}:{violation.violation_type}"
+                          
+                          # Update running average
+!                         if key not in self.action_effectiveness:
+!                             self.action_effectiveness[key] = {
+!                                 "score": 0.0,
+!                                 "count": 0
+!                             }
+                          
+!                         current = self.action_effectiveness[key]
+!                         current["score"] = ((current["score"] * current["count"]) + effectiveness) / (current["count"] + 1)
+!                         current["count"] += 1
+                          
+                          # Update action's effectiveness for this violation type
+                          # Use exponential moving average to give more weight to recent results
+!                         alpha = 0.3  # Weight for new value
+!                         old_value = action.effectiveness.get(violation.violation_type, 0.5)
+!                         new_value = (alpha * effectiveness) + ((1 - alpha) * old_value)
+!                         action.effectiveness[violation.violation_type] = new_value
+                          
+!                         logging.info(f"Updated effectiveness of {action_name} for {violation.violation_type}: {old_value:.2f} -> {new_value:.2f}")
+          
+          # Save updated actions
+!         self._save_actions(self.available_actions)
+      
+!     def _run_training_simulations(self):
+!         """Run simulations to test and improve the model"""
+          # Simulate violations based on patterns we've seen
+!         num_simulations = min(20, max(5, len(self.violations_history) // 10))
+          
+!         logging.info(f"Running {num_simulations} training simulations")
+          
+!         correct_predictions = 0
+          
+!         for _ in range(num_simulations):
+              # Either use a pattern or generate random violation
+!             use_pattern = random.random() < 0.7 and self.violation_patterns
+              
+!             if use_pattern:
+                  # Select a pattern and generate violation based on it
+!                 pattern_key = random.choice(list(self.violation_patterns.keys()))
+!                 parts = pattern_key.split(':')
+!                 if len(parts) >= 2:
+!                     violation_type = parts[0]
+!                     source = parts[1]
+                      
+!                     violation = self._simulate_specific_violation(violation_type, source)
+!                 else:
+!                     violation = self._simulate_violation()
+!             else:
+!                 violation = self._simulate_violation()
+              
+              # For training, we'll try multiple actions and see which works best
+!             best_reward = -float('inf')
+!             best_action = None
+              
+              # Try top 3 actions based on current model
+!             state_key = self._get_state_key(violation)
+!             if state_key in self.state_action_rewards:
+!                 actions = sorted(self.state_action_rewards[state_key].items(), 
+!                                 key=lambda x: x[1], reverse=True)
+!                 top_actions = [a[0] for a in actions[:3]]
+!             else:
+                  # Try random actions if no learned rewards
+!                 top_actions = random.sample(list(self.available_actions.keys()), 
+!                                           min(3, len(self.available_actions)))
+              
+              # For each action, simulate response and calculate reward
+!             for action_name in top_actions:
+!                 result = self._execute_response(violation, action_name)
+                  
+                  # Determine effectiveness
+!                 if result["status"] == "success":
+!                     effectiveness = random.uniform(0.7, 1.0)
+!                     outcome = "mitigated"
+!                 else:
+!                     effectiveness = random.uniform(0.0, 0.4)
+!                     outcome = "failed"
+                  
+                  # Calculate reward
+!                 reward = self._calculate_reward(violation, action_name, effectiveness, outcome)
+                  
+                  # Update Q-values
+!                 self._update_action_reward(state_key, action_name, reward)
+                  
+                  # Track best action
+!                 if reward > best_reward:
+!                     best_reward = reward
+!                     best_action = action_name
+              
+              # Check if our model would have chosen the best action
+!             model_action = self._select_response_action(violation)
+!             if model_action == best_action:
+!                 correct_predictions += 1
+          
+          # Calculate and update accuracy
+!         if num_simulations > 0:
+!             accuracy = correct_predictions / num_simulations
+!             self.stats["model_accuracy"] = accuracy
+!             logging.info(f"Training accuracy: {accuracy:.2f}")
+      
+!     def _simulate_specific_violation(self, violation_type: str, source: str) -> SecurityViolation:
+!         """Simulate a specific type of violation from a specific source"""
+!         severities = ["low", "medium", "high", "critical"]
+!         severity = random.choice(severities)
+          
+          # Generate appropriate details based on violation type
+!         details = {}
+!         if violation_type == "brute_force":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "user_agent": random.choice(["Mozilla/5.0", "Python-requests/2.25.1", "curl/7.68.0"]),
+!                 "attempts": random.randint(5, 50),
+!                 "target_user": f"user{random.randint(1, 1000)}"
+!             }
+!         elif violation_type == "api_abuse":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "endpoint": f"/api/v1/{random.choice(['users', 'data', 'reports', 'config'])}",
+!                 "rate": random.randint(100, 1000),
+!                 "threshold": random.randint(50, 200)
+!             }
+!         elif violation_type == "data_exfiltration":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "data_type": random.choice(["user_data", "configuration", "logs", "credentials"]),
+!                 "volume_mb": random.uniform(10, 500),
+!                 "destination": f"external-{random.randint(1, 100)}.example.com"
+!             }
+!         elif violation_type == "ceiling_violation":
+!             ceiling_types = ["budget", "latency", "trust_threshold", "success_rate", "rate_limit"]
+!             details = {
+!                 "ceiling_type": random.choice(ceiling_types),
+!                 "config_id": f"config-{random.randint(1, 20)}",
+!                 "attempted_value": random.uniform(100, 1000),
+!                 "ceiling_value": random.uniform(50, 500),
+!                 "user_id": f"user{random.randint(1, 1000)}"
+!             }
+          
+!         violation = SecurityViolation(
+!             violation_type=violation_type,
+!             severity=severity,
+!             timestamp=self.timestamp(),
+!             details=details,
+!             source=source
+!         )
+          
+!         return violation
+      
+!     def start_monitoring(self):
+!         """Start security violation monitoring in background thread"""
+!         if not self.is_monitoring:
+!             self.monitor_thread = threading.Thread(target=self.detect_and_respond_to_violations)
+!             self.monitor_thread.daemon = True
+!             self.monitor_thread.start()
+              
+              # Also start learning thread
+!             if not self.is_learning:
+!                 self.learning_thread = threading.Thread(target=self.run_learning_cycle)
+!                 self.learning_thread.daemon = True
+!                 self.learning_thread.start()
+              
+!             return {"status": "started", "timestamp": self.timestamp()}
+!         return {"status": "already_running", "timestamp": self.timestamp()}
+      
+!     def stop_monitoring(self):
+!         """Stop security violation monitoring"""
+!         if self.is_monitoring:
+!             self.is_monitoring = False
+!             if self.monitor_thread:
+!                 self.monitor_thread.join(timeout=2.0)
+              
+!             if self.is_learning:
+!                 self.is_learning = False
+!                 if self.learning_thread:
+!                     self.learning_thread.join(timeout=2.0)
+              
+!             return {"status": "stopped", "timestamp": self.timestamp()}
+!         return {"status": "not_running", "timestamp": self.timestamp()}
+      
+!     def get_effectiveness_report(self) -> Dict[str, Any]:
+!         """Generate a report on action effectiveness"""
+!         actions_effectiveness = {}
+          
+!         for action_name, action in self.available_actions.items():
+!             actions_effectiveness[action_name] = {
+!                 "overall_success_rate": action.success_rate,
+!                 "usage_count": action.usage_count,
+!                 "success_count": action.success_count,
+!                 "impact": action.impact,
+!                 "effectiveness_by_violation": action.effectiveness,
+!                 "recommended_for": []
+!             }
+          
+          # Determine which actions are recommended for which violations
+!         for violation_type in ["brute_force", "api_abuse", "data_exfiltration", "ceiling_violation"]:
+!             for severity in ["low", "medium", "high", "critical"]:
+                  # Create a fake violation to use our selection logic
+!                 violation = SecurityViolation(
+!                     violation_type=violation_type,
+!                     severity=severity,
+!                     timestamp=self.timestamp(),
+!                     details={},
+!                     source="report_generator"
+!                 )
+                  
+                  # Use deterministic selection (no exploration)
+!                 saved_exploration_rate = self.config["learning_parameters"]["exploration_rate"]
+!                 self.config["learning_parameters"]["exploration_rate"] = 0
+                  
+!                 recommended_action = self._select_response_action(violation)
+                  
+                  # Restore exploration rate
+!                 self.config["learning_parameters"]["exploration_rate"] = saved_exploration_rate
+                  
+                  # Add to recommended list
+!                 if recommended_action in actions_effectiveness:
+!                     actions_effectiveness[recommended_action]["recommended_for"].append(
+!                         f"{violation_type}:{severity}")
+          
+          # Calculate model performance metrics
+!         performance_metrics = {
+!             "accuracy": self.stats["model_accuracy"],
+!             "training_cycles": self.stats["training_cycles"],
+!             "violations_detected": self.stats["violations_detected"],
+!             "successful_mitigations": self.stats["successful_mitigations"],
+!             "failed_mitigations": self.stats["failed_mitigations"],
+!             "false_positives": self.stats["false_positives"],
+!             "mitigation_rate": (self.stats["successful_mitigations"] / max(1, self.stats["violations_detected"] - self.stats["false_positives"])) * 100
+!         }
+          
+          # Get pattern insights
+!         pattern_insights = []
+!         for pattern_key, pattern_data in self.violation_patterns.items():
+!             parts = pattern_key.split(':')
+!             if len(parts) >= 3:
+!                 violation_type = parts[0]
+!                 source = parts[1]
+!                 occurrences = parts[2]
+                  
+!                 pattern_insights.append({
+!                     "pattern": f"{violation_type} from {source} ({occurrences} occurrences)",
+!                     "count": pattern_data["count"],
+!                     "first_seen": pattern_data["first_seen"],
+!                     "last_seen": pattern_data["last_seen"],
+!                     "recommended_action": self._get_recommendation_for_pattern(pattern_key)
+!                 })
+          
+!         report = {
+!             "timestamp": self.timestamp(),
+!             "actions_effectiveness": actions_effectiveness,
+!             "performance_metrics": performance_metrics,
+!             "pattern_insights": pattern_insights,
+!             "learning_progress": {
+!                 "state_action_pairs": len(self.state_action_rewards),
+!                 "unique_patterns": len(self.violation_patterns),
+!                 "last_updated": self.stats["last_updated"]
+!             }
+!         }
+          
+!         return report
+      
+!     def _get_recommendation_for_pattern(self, pattern_key: str) -> str:
+!         """Get recommendation for a specific pattern"""
+!         parts = pattern_key.split(':')
+!         if len(parts) < 2:
+!             return "No specific recommendation available"
+          
+!         violation_type = parts[0]
+!         source = parts[1]
+          
+          # Create a synthetic state key
+!         state_key = f"{violation_type}:high:{source}"  # Assume high severity for patterns
+          
+!         if state_key in self.state_action_rewards:
+              # Get best action
+!             best_action = max(self.state_action_rewards[state_key].items(), key=lambda x: x[1])[0]
+!             return f"Implement {best_action} (confidence: {self.state_action_rewards[state_key][best_action]:.2f})"
+          
+          # Fallback to best action by effectiveness
+!         best_action = None
+!         best_score = -1
+          
+!         for name, action in self.available_actions.items():
+!             score = action.effectiveness.get(violation_type, 0.3)
+!             if score > best_score:
+!                 best_score = score
+!                 best_action = name
+          
+!         if best_action:
+!             return f"Consider {best_action} (effectiveness: {best_score:.2f})"
+          
+!         return "Insufficient data for recommendation"
+  
+  
+! def main():
+!     """CLI interface for adaptive security system"""
+!     import argparse
+      
+!     parser = argparse.ArgumentParser(description="EPOCH5 Adaptive Security System")
+!     subparsers = parser.add_subparsers(dest="command", help="Available commands")
+      
+      # Start monitoring command
+!     start_parser = subparsers.add_parser("start", help="Start security monitoring and learning")
+      
+      # Stop monitoring command
+!     stop_parser = subparsers.add_parser("stop", help="Stop security monitoring and learning")
+      
+      # Report command
+!     report_parser = subparsers.add_parser("report", help="Generate effectiveness report")
+      
+      # Simulate violation command
+!     simulate_parser = subparsers.add_parser("simulate", help="Simulate a security violation")
+!     simulate_parser.add_argument("--type", choices=["brute_force", "api_abuse", "data_exfiltration", "ceiling_violation"],
+!                               default="ceiling_violation", help="Type of violation to simulate")
+!     simulate_parser.add_argument("--severity", choices=["low", "medium", "high", "critical"],
+!                                default="medium", help="Severity of violation")
+      
+!     args = parser.parse_args()
+      
+!     security_engine = AdaptiveSecurityEngine()
+      
+!     if args.command == "start":
+!         result = security_engine.start_monitoring()
+!         print(f"Adaptive security monitoring {result['status']} at {result['timestamp']}")
+!         print("System will automatically detect, respond to, and learn from security violations")
+!         print("Use 'stop' command to halt monitoring")
+      
+!     elif args.command == "stop":
+!         result = security_engine.stop_monitoring()
+!         print(f"Security monitoring {result['status']} at {result['timestamp']}")
+      
+!     elif args.command == "report":
+!         report = security_engine.get_effectiveness_report()
+          
+!         print(f"\n🛡️ EPOCH5 Adaptive Security Effectiveness Report ({report['timestamp']})")
+!         print("\nPerformance Metrics:")
+!         metrics = report["performance_metrics"]
+!         print(f"  Violations Detected: {metrics['violations_detected']}")
+!         print(f"  Successful Mitigations: {metrics['successful_mitigations']}")
+!         print(f"  Failed Mitigations: {metrics['failed_mitigations']}")
+!         print(f"  False Positives: {metrics['false_positives']}")
+!         print(f"  Mitigation Success Rate: {metrics['mitigation_rate']:.2f}%")
+!         print(f"  Model Accuracy: {metrics['accuracy']:.2f}")
+!         print(f"  Training Cycles: {metrics['training_cycles']}")
+          
+!         print("\nTop Performing Actions:")
+!         actions = sorted(report["actions_effectiveness"].items(), 
+!                        key=lambda x: x[1]["overall_success_rate"], 
+!                        reverse=True)[:3]
+          
+!         for name, data in actions:
+!             print(f"  {name}:")
+!             print(f"    Success Rate: {data['overall_success_rate']:.2f}")
+!             print(f"    Used {data['success_count']} times successfully out of {data['usage_count']} attempts")
+!             print(f"    Recommended for: {', '.join(data['recommended_for'][:3])}")
+!             if len(data['recommended_for']) > 3:
+!                 print(f"      and {len(data['recommended_for']) - 3} more...")
+          
+!         print("\nPattern Insights:")
+!         if report["pattern_insights"]:
+!             for i, pattern in enumerate(report["pattern_insights"][:5], 1):
+!                 print(f"  {i}. {pattern['pattern']} (seen {pattern['count']} times)")
+!                 print(f"     Recommendation: {pattern['recommended_action']}")
+!         else:
+!             print("  No patterns detected yet")
+          
+!         print(f"\nLearning Progress: {report['learning_progress']['state_action_pairs']} state-action pairs learned")
+      
+!     elif args.command == "simulate":
+          # Create specific violation type
+!         source = random.choice(["api_gateway", "user_auth", "data_access", "agent_execution", "ceiling_manager"])
+          
+          # Generate details based on violation type
+!         details = {}
+!         if args.type == "brute_force":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "user_agent": random.choice(["Mozilla/5.0", "Python-requests/2.25.1", "curl/7.68.0"]),
+!                 "attempts": random.randint(5, 50),
+!                 "target_user": f"user{random.randint(1, 1000)}"
+!             }
+!         elif args.type == "api_abuse":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "endpoint": f"/api/v1/{random.choice(['users', 'data', 'reports', 'config'])}",
+!                 "rate": random.randint(100, 1000),
+!                 "threshold": random.randint(50, 200)
+!             }
+!         elif args.type == "data_exfiltration":
+!             details = {
+!                 "ip_address": f"192.168.1.{random.randint(2, 254)}",
+!                 "data_type": random.choice(["user_data", "configuration", "logs", "credentials"]),
+!                 "volume_mb": random.uniform(10, 500),
+!                 "destination": f"external-{random.randint(1, 100)}.example.com"
+!             }
+!         elif args.type == "ceiling_violation":
+!             ceiling_types = ["budget", "latency", "trust_threshold", "success_rate", "rate_limit"]
+!             details = {
+!                 "ceiling_type": random.choice(ceiling_types),
+!                 "config_id": f"config-{random.randint(1, 20)}",
+!                 "attempted_value": random.uniform(100, 1000),
+!                 "ceiling_value": random.uniform(50, 500),
+!                 "user_id": f"user{random.randint(1, 1000)}"
+!             }
+          
+!         violation = SecurityViolation(
+!             violation_type=args.type,
+!             severity=args.severity,
+!             timestamp=security_engine.timestamp(),
+!             details=details,
+!             source=source
+!         )
+          
+!         result = security_engine.process_violation(violation)
+          
+!         print(f"Simulated {args.severity} {args.type} violation from {source}")
+          
+!         if result.response_actions:
+!             response = result.response_actions[-1]
+!             print(f"Response: {response['action']} - {response['result']['status']}")
+!             if result.outcome:
+!                 print(f"Outcome: {result.outcome['status']} (Effectiveness: {result.outcome['effectiveness']:.2f})")
+!         else:
+!             print("No automated response (auto-response disabled)")
+      
+!     else:
+!         parser.print_help()
+  
+  
+- if __name__ == "__main__":
+-     main()

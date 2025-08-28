@@ -1,0 +1,91 @@
+{
+  "subscription_tiers": {
+    "basic": {
+      "name": "Basic Autonomous",
+      "monthly_price": 499,
+      "annual_price": 4990,
+      "components_included": 50,
+      "additional_component_price": 10
+    },
+    "professional": {
+      "name": "Professional Autonomous",
+      "monthly_price": 1499,
+      "annual_price": 14990,
+      "components_included": 200,
+      "additional_component_price": 8
+    },
+    "enterprise": {
+      "name": "Enterprise Autonomous",
+      "monthly_price": 4999,
+      "annual_price": 49990,
+      "components_included": 1000,
+      "additional_component_price": 5
+    },
+    "custom": {
+      "name": "Custom Autonomous",
+      "monthly_price": 9990,
+      "annual_price": 99990,
+      "components_included": 5000,
+      "additional_component_price": 3
+    }
+  },
+  "implementation_packages": {
+    "standard": {
+      "name": "Standard Implementation",
+      "price": 10000,
+      "training_days_included": 2
+    },
+    "advanced": {
+      "name": "Advanced Implementation",
+      "price": 25000,
+      "training_days_included": 5
+    },
+    "enterprise": {
+      "name": "Enterprise Implementation",
+      "price": 50000,
+      "training_days_included": 10
+    },
+    "custom": {
+      "name": "Custom Implementation",
+      "price": 100000,
+      "training_days_included": 20
+    }
+  },
+  "additional_services": {
+    "training_day_price": 2000,
+    "custom_development_hourly": 200,
+    "premium_support_percentage": 0.15,
+    "data_insights_service": 5000,
+    "managed_service_percentage": 0.25
+  },
+  "volume_discounts": {
+    "components": [
+      {"threshold": 100, "discount": 0.10},
+      {"threshold": 500, "discount": 0.20},
+      {"threshold": 1000, "discount": 0.30},
+      {"threshold": 5000, "discount": 0.40}
+    ]
+  },
+  "multi_year_discounts": {
+    "2_year": 0.15,
+    "3_year": 0.25,
+    "5_year": 0.35
+  },
+  "industry_specific_packages": {
+    "financial_services": {
+      "name": "Financial Services Package",
+      "addon_price": 15000,
+      "features": ["Regulatory Compliance Module", "Financial Data Integrations", "Audit Trail"]
+    },
+    "healthcare": {
+      "name": "Healthcare Package",
+      "addon_price": 20000,
+      "features": ["HIPAA Compliance", "Medical Systems Integration", "Patient Data Security"]
+    },
+    "manufacturing": {
+      "name": "Manufacturing Package",
+      "addon_price": 18000,
+      "features": ["IoT Device Integration", "Production Line Optimization", "Supply Chain Management"]
+    }
+  }
+}

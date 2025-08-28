@@ -20,10 +20,17 @@ from cycle_execution import CycleExecutor
 from capsule_metadata import CapsuleManager
 from meta_capsule import MetaCapsuleCreator
 
+# Import security and audit components
+try:
+    from epoch_audit import EpochAudit
+    from agent_security import AgentSecurityController
+    SECURITY_SYSTEM_AVAILABLE = True
+except ImportError:
+    SECURITY_SYSTEM_AVAILABLE = False
+
 # Import ceiling manager for enhanced ceiling features
 try:
     from ceiling_manager import CeilingManager, ServiceTier, CeilingType
-
     CEILING_MANAGER_AVAILABLE = True
 except ImportError:
     CEILING_MANAGER_AVAILABLE = False
@@ -44,6 +51,14 @@ class EPOCH5Integration:
         self.capsule_manager = CapsuleManager(str(base_dir))
         self.meta_capsule_creator = MetaCapsuleCreator(str(base_dir))
 
+        # Initialize security and audit system if available
+        if SECURITY_SYSTEM_AVAILABLE:
+            self.audit_system = EpochAudit(str(base_dir))
+            self.security_controller = AgentSecurityController(str(base_dir))
+        else:
+            self.audit_system = None
+            self.security_controller = None
+
         # Initialize ceiling manager if available
         if CEILING_MANAGER_AVAILABLE:
             self.ceiling_manager = CeilingManager(str(base_dir))
@@ -52,6 +67,7 @@ class EPOCH5Integration:
 
         # Integration log
         self.integration_log = self.base_dir / "integration.log"
+        self.integration_events_log = self.base_dir / "integration_events.log"
 
     def timestamp(self) -> str:
         """Generate ISO timestamp"""
@@ -61,8 +77,19 @@ class EPOCH5Integration:
         """Log integration events"""
         log_entry = {"timestamp": self.timestamp(), "event": event, "data": data}
 
-        with open(self.integration_log, "a") as f:
-            f.write(f"{json.dumps(log_entry)}\n")
+            self._write_log_entry(log_entry, [self.integration_log, self.integration_events_log])
+            
+            # Also log to security audit system if available
+            if self.audit_system:
+                self.audit_system.log_event(f"integration_{event.lower()}", 
+                                          f"Integration: {event}", 
+                                          data)
+    
+        def _write_log_entry(self, log_entry: Dict[str, Any], log_files: List[Path]):
+            """Helper to write log entry to multiple files"""
+            for log_file in log_files:
+                with open(log_file, "a") as f:
+                    f.write(f"{json.dumps(log_entry)}\n")
 
     def setup_demo_environment(self) -> Dict[str, Any]:
         """Set up a complete demo environment with sample data"""
@@ -382,6 +409,28 @@ class EPOCH5Integration:
         meta_capsules = self.meta_capsule_creator.list_meta_capsules()
         status["components"]["meta_capsules"] = {"total": len(meta_capsules)}
 
+        # Security and audit status (if available)
+        if self.audit_system and self.security_controller:
+            try:
+                # Get recent audit events
+                recent_events = self.audit_system.get_recent_events(limit=10)
+                ceiling_enforcements = [e for e in recent_events if e.get("event_type") == "ceiling_enforcement"]
+                
+                # Get security report data (simplified for status)
+                # In a real implementation, we'd use self.security_controller.generate_security_report() 
+                
+                status["components"]["security"] = {
+                    "audit_events_24h": len(recent_events),
+                    "ceiling_enforcements_24h": len(ceiling_enforcements),
+                    "audit_system": "active",
+                    "security_controller": "active"
+                }
+            except Exception as e:
+                status["components"]["security"] = {
+                    "status": "error",
+                    "error": str(e)
+                }
+
         # Ceiling status (if available)
         if self.ceiling_manager:
             ceilings_data = self.ceiling_manager.load_ceilings()
@@ -463,6 +512,22 @@ class EPOCH5Integration:
                 "valid": valid_meta_capsules,
                 "invalid": len(meta_capsules) - valid_meta_capsules,
             }
+            
+            # Validate audit log integrity if available
+            if self.audit_system:
+                audit_verification = self.audit_system.verify_seals()
+                
+                validation_results["validations"]["audit_log"] = {
+                    "total_checked": audit_verification.get("verified_count", 0),
+                    "valid": audit_verification.get("valid_count", 0),
+                    "invalid": audit_verification.get("invalid_count", 0),
+                    "status": audit_verification.get("status", "UNKNOWN")
+                }
+                
+                if audit_verification.get("status") != "PASSED" and audit_verification.get("invalid_count", 0) > 0:
+                    validation_results["errors"].append(
+                        f"Audit log integrity validation failed: {audit_verification.get('invalid_count', 0)} invalid records"
+                    )
 
             # Overall validation
             validation_results["overall_valid"] = (
@@ -507,6 +572,28 @@ def main():
     policy_parser = subparsers.add_parser("policies", help="Policy management commands")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command")
     policy_subparsers.add_parser("list", help="List policies")
+    
+    # Security and audit commands (if available)
+    if SECURITY_SYSTEM_AVAILABLE:
+        security_parser = subparsers.add_parser("security", help="Security management commands")
+        security_subparsers = security_parser.add_subparsers(dest="security_command")
+        
+        # Generate security report
+        security_subparsers.add_parser("report", help="Generate security report")
+        
+        # Generate audit scroll
+        scroll_parser = security_subparsers.add_parser("scroll", help="Generate audit scroll")
+        scroll_parser.add_argument("--output", help="Output file path")
+        
+        # Verify agent integrity
+        verify_parser = security_subparsers.add_parser("verify", help="Verify agent integrity")
+        verify_parser.add_argument("agent_did", help="Agent DID")
+        
+        # Ceiling enforcement
+        ceiling_parser = security_subparsers.add_parser("enforce", help="Enforce ceiling on a value")
+        ceiling_parser.add_argument("metric", help="Metric to enforce ceiling on")
+        ceiling_parser.add_argument("value", type=float, help="Value to check")
+        ceiling_parser.add_argument("--agent", help="Optional agent DID")
 
     # Ceiling management commands (if available)
     if CEILING_MANAGER_AVAILABLE:
@@ -553,6 +640,7 @@ def main():
             "quick-capsule",
             "quick-meta",
             "system-snapshot",
+            "security-check"  # Added security check option
         ],
         help="One-liner operation to execute",
     )
@@ -706,6 +794,67 @@ def main():
                 print(f"    Rate limit: {tier_config['ceilings']['rate_limit']} req/hr")
                 print("")
 
+    elif args.command == "security" and SECURITY_SYSTEM_AVAILABLE:
+        if args.security_command == "report":
+            print("Generating security report...")
+            report = integration.security_controller.generate_security_report()
+            
+            print(f"Security Report ({report['timestamp']}):")
+            print(f"Agent count: {report['agent_count']}")
+            print(f"Online agents: {report['online_agents']}")
+            print(f"Offline agents: {report['offline_agents']}")
+            
+            print("\nAgent status:")
+            for agent in report['agents']:
+                status_emoji = "✅" if agent["status"] == "online" else "❌"
+                integrity_emoji = "✅" if agent["integrity"] == "verified" else "⚠️"
+                print(f"  {status_emoji} {agent['did']}: {agent['status']} ({integrity_emoji} {agent['integrity']})")
+        
+        elif args.security_command == "scroll":
+            print("Generating audit scroll...")
+            output_file = args.output if args.output else None
+            scroll_file = integration.audit_system.generate_audit_scroll(output_file)
+            
+            print(f"Audit scroll generated: {scroll_file}")
+            
+            # Display beginning of scroll
+            try:
+                with open(scroll_file, "r") as f:
+                    head = "".join(f.readlines()[:20])
+                    print("\nAudit Scroll Preview:")
+                    print(head)
+                    print("...")
+            except Exception as e:
+                print(f"Error displaying scroll: {str(e)}")
+        
+        elif args.security_command == "verify":
+            print(f"Verifying agent integrity for {args.agent_did}...")
+            verification = integration.security_controller.verify_agent_integrity(args.agent_did)
+            
+            print(f"Verification status: {verification['status']}")
+            print("\nChecks:")
+            for check_name, check in verification['checks'].items():
+                status_emoji = "✅" if check["status"] == "ok" else "⚠️"
+                print(f"  {status_emoji} {check_name}: {check['status']}")
+                
+                if check_name == "heartbeat":
+                    print(f"    Last heartbeat: {check['age']}s ago")
+                    print(f"    Required interval: {check['required_interval']}s")
+                
+                if check_name == "reliability":
+                    print(f"    Score: {check['score']:.2f}")
+        
+        elif args.security_command == "enforce":
+            print(f"Enforcing ceiling on {args.metric} value: {args.value}...")
+            agent_context = f" for agent {args.agent}" if args.agent else ""
+            
+            result = integration.audit_system.enforce_ceiling(args.metric, args.value, args.agent)
+            
+            if result["capped"]:
+                print(f"✂️  Ceiling enforced: {result['original_value']} → {result['final_value']}{agent_context}")
+            else:
+                print(f"✅ Value {result['original_value']} is within ceiling ({result['ceiling']}){agent_context}")
+    
     elif args.command == "oneliner":
         # Execute one-liner operations
         params = json.loads(args.params) if args.params else {}
@@ -728,6 +877,24 @@ def main():
             print(
                 f"Files captured: {meta_capsule['system_state']['summary_stats']['total_files_captured']}"
             )
+        
+        elif args.operation == "security-check" and SECURITY_SYSTEM_AVAILABLE:
+            # Quick security check oneliner
+            print("Running quick security check...")
+            
+            # Verify audit log integrity
+            verification = integration.audit_system.verify_seals(max_events=20)
+            print(f"Audit log verification: {verification['status']}")
+            print(f"  Verified {verification['verified_count']} events")
+            print(f"  Valid: {verification['valid_count']}, Invalid: {verification['invalid_count']}")
+            
+            # Generate security report
+            if integration.security_controller:
+                report = integration.security_controller.generate_security_report()
+                print(f"\nSecurity report summary:")
+                print(f"  Agents: {report['agent_count']} ({report['online_agents']} online, {report['offline_agents']} offline)")
+            
+            print("\nSecurity check completed")
 
         else:
             print(f"One-liner operation '{args.operation}' not implemented yet")

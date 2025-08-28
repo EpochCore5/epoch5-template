@@ -1,0 +1,113 @@
+{
+  "labor_cost_savings": {
+    "operations_staff_hourly": 75,
+    "developer_hourly": 120,
+    "executive_hourly": 200,
+    "annual_hours": 2080,
+    "productivity_improvement": {
+      "year_1": 0.20,
+      "year_2": 0.35,
+      "year_3": 0.45,
+      "year_4": 0.50,
+      "year_5": 0.55
+    }
+  },
+  "incident_reduction": {
+    "minor_incident": {
+      "cost": 5000,
+      "reduction": {
+        "year_1": 0.30,
+        "year_2": 0.50,
+        "year_3": 0.70,
+        "year_4": 0.75,
+        "year_5": 0.80
+      }
+    },
+    "major_incident": {
+      "cost": 50000,
+      "reduction": {
+        "year_1": 0.20,
+        "year_2": 0.40,
+        "year_3": 0.60,
+        "year_4": 0.65,
+        "year_5": 0.70
+      }
+    },
+    "critical_incident": {
+      "cost": 500000,
+      "reduction": {
+        "year_1": 0.10,
+        "year_2": 0.30,
+        "year_3": 0.50,
+        "year_4": 0.55,
+        "year_5": 0.60
+      }
+    }
+  },
+  "downtime_reduction": {
+    "hourly_cost": 10000,
+    "reduction": {
+      "year_1": 0.15,
+      "year_2": 0.30,
+      "year_3": 0.45,
+      "year_4": 0.50,
+      "year_5": 0.55
+    }
+  },
+  "scaling_efficiency": {
+    "infrastructure_savings": {
+      "year_1": 0.10,
+      "year_2": 0.20,
+      "year_3": 0.30,
+      "year_4": 0.35,
+      "year_5": 0.40
+    }
+  },
+  "compliance_improvement": {
+    "audit_cost_reduction": {
+      "year_1": 0.15,
+      "year_2": 0.30,
+      "year_3": 0.40,
+      "year_4": 0.45,
+      "year_5": 0.50
+    },
+    "penalty_reduction": {
+      "year_1": 0.20,
+      "year_2": 0.40,
+      "year_3": 0.60,
+      "year_4": 0.70,
+      "year_5": 0.75
+    }
+  },
+  "standard_metrics": {
+    "discount_rate": 0.10,
+    "inflation_rate": 0.025
+  },
+  "industry_specific_factors": {
+    "financial_services": {
+      "incident_cost_multiplier": 1.5,
+      "compliance_risk_multiplier": 2.0,
+      "downtime_cost_multiplier": 2.0
+    },
+    "healthcare": {
+      "incident_cost_multiplier": 1.8,
+      "compliance_risk_multiplier": 2.5,
+      "downtime_cost_multiplier": 1.5
+    },
+    "manufacturing": {
+      "incident_cost_multiplier": 1.2,
+      "compliance_risk_multiplier": 1.0,
+      "downtime_cost_multiplier": 2.5
+    },
+    "retail": {
+      "incident_cost_multiplier": 1.3,
+      "compliance_risk_multiplier": 1.2,
+      "downtime_cost_multiplier": 1.8
+    },
+    "government": {
+      "incident_cost_multiplier": 1.1,
+      "compliance_risk_multiplier": 1.8,
+      "downtime_cost_multiplier": 1.3
+    }
+  }
+}

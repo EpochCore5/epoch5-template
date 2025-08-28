@@ -1,0 +1,42 @@
+{
+  "agent": {
+    "name": "StrategyDECKAgent",
+    "version": "1.0.0",
+    "max_workers": 4,
+    "logging": {
+      "console_level": "INFO",
+      "file_level": "DEBUG",
+      "log_dir": "./archive/EPOCH5/logs/strategydeck",
+      "log_format": "[%(asctime)s] %(levelname)s: %(message)s",
+      "max_log_size_mb": 10,
+      "max_log_files": 5
+    },
+    "execution": {
+      "default_timeout": 30.0,
+      "default_retries": 2,
+      "retry_delay": 1.0
+    }
+  },
+  "integration": {
+    "epoch5": {
+      "base_dir": "./archive/EPOCH5",
+      "heartbeat_interval": 60,
+      "skills": [
+        "strategy_automation",
+        "workflow_optimization",
+        "resource_management",
+        "decision_support"
+      ]
+    }
+  },
+  "strategies": {
+    "default_priority": "medium",
+    "allow_external_resources": false,
+    "max_constraints": 10
+  },
+  "security": {
+    "input_validation": true,
+    "sanitize_logs": true,
+    "max_payload_size_kb": 512
+  }
+}

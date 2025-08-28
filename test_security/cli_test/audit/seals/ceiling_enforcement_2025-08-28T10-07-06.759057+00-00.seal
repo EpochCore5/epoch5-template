@@ -1,0 +1,12 @@
+EVENT: ceiling_enforcement
+TIMESTAMP: 2025-08-28T10:07:06.759057+00:00
+EPOCH: 1756375626
+NOTE: Ceiling enforced on task_priority for agent:cli-agent: 150 → 100
+SEAL: 40f6300d3b4c61000ce8cf66d093483ae339bd84053bd06f281bc5bf5a091523
+DATA: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "cli-agent"
+}

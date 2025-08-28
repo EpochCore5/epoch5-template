@@ -1,0 +1,57 @@
+name: "CodeQL Configuration"
+
+paths:
+  - '.'
+paths-ignore:
+  - 'tests'
+  - 'docs'
+  - '**/*.md'
+  - '**/*.txt'
+  - '**/LICENSE'
+  - '**/README'
+
+queries:
+  - name: Security and Quality
+    uses: security-and-quality
+  - name: Security Extended
+    uses: security-extended
+
+query-filters:
+  - exclude:
+      id: py/syntax-error  # Ignore syntax errors
+  - exclude:
+      id: py/empty-except # Allow empty except blocks
+      
+# Python specific configuration
+python:
+  database:
+    # Optional: Define database extraction options
+    extraction:
+      python:
+        version: "3.10"
+        # Include type hints in analysis
+        index-type-annotations: true
+        # Use type inference
+        index-type-inferences: true
+  analysis:
+    # Enable taint tracking
+    enable-taint-tracking: true
+    # Limit per-query analysis time to 5 minutes
+    maximum-query-time-per-file: 300
+
+# Alert suppression configuration
+alert-suppression:
+  # Suppress alerts for legacy code
+  - pattern: 'legacy_code/**'
+    reason: 'Legacy code - scheduled for refactoring'
+  # Suppress alerts for test fixtures
+  - pattern: 'tests/fixtures/**'
+    reason: 'Test fixture data'
+
+# Additional customizations
+disable-default-queries: false
+packs:
+  # Include the python security query pack
+  - codeql/python-queries:recommended
+  # Include the security-extended query pack
+  - codeql/security-extended

@@ -1,0 +1,12 @@
+EVENT: ceiling_enforcement
+TIMESTAMP: 2025-08-28T08:52:16.951498+00:00
+EPOCH: 1756371136
+NOTE: Ceiling enforced on resource_allocation for system: 120 → 100
+SEAL: 76732b0f6651754b0e4faf6510c66c8db8b665e6855bfe1113c8131a04119f4f
+DATA: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}

@@ -1,0 +1,572 @@
+name: EPOCH5 Enhanced CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**', 'release/**' ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly security scan every Monday at 2 AM
+  workflow_dispatch:  # Manual trigger option
+
+env:
+  PYTHON_VERSION: '3.10'
+  CACHE_DEPS_KEY: 'deps-${{ hashFiles(''**/requirements.txt'') }}'
+  COVERAGE_THRESHOLD: 80
+
+jobs:
+  # Code Quality and Validation
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full git history for tools like git-diff
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pre-commit black flake8 mypy isort bandit safety pylint
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files
+
+      - name: Check formatting with Black
+        run: black --check --diff .
+
+      - name: Run linting with Flake8
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run static type checking with MyPy
+        run: mypy --ignore-missing-imports .
+
+      - name: Run import sorting check
+        run: isort --check-only --profile black .
+        
+      - name: Run Pylint
+        run: pylint --disable=C0111,R0903,C0103 *.py
+        continue-on-error: true
+
+  # Security Scanning and Vulnerability Assessment
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bandit safety
+
+      - name: Run Bandit security scan
+        run: bandit -r . --exclude ./tests,./venv -f json -o bandit-results.json
+        continue-on-error: true
+
+      - name: Upload Bandit scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-results
+          path: bandit-results.json
+
+      - name: Run dependency vulnerability scan with Safety
+        run: safety check -r requirements.txt --json > safety-results.json
+        continue-on-error: true
+
+      - name: Upload Safety scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: safety-results
+          path: safety-results.json
+
+      - name: Check for secrets in code
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # Comprehensive Testing
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: security-scan
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        exclude:
+          # Limit combinations to reduce CI time
+          - os: macos-latest
+            python-version: '3.8'
+          - os: macos-latest
+            python-version: '3.9'
+          - os: windows-latest
+            python-version: '3.8'
+          - os: windows-latest
+            python-version: '3.9'
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-mock pytest-xdist pytest-timeout
+
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=. --cov-report=xml --cov-report=term-missing --junitxml=test-results.xml -v --timeout=300
+
+      - name: Verify coverage meets threshold
+        run: |
+          python -c "import xml.etree.ElementTree as ET; \
+          tree = ET.parse('coverage.xml'); \
+          root = tree.getroot(); \
+          coverage = float(root.attrib['line-rate']) * 100; \
+          print(f'Coverage: {coverage:.2f}%'); \
+          exit(0 if coverage >= ${{ env.COVERAGE_THRESHOLD }} else 1)"
+        continue-on-error: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.python-version }}-${{ matrix.os }}
+          path: |
+            test-results.xml
+            coverage.xml
+
+  # StrategyDECK Agent Specific Tests
+  strategydeck-tests:
+    name: StrategyDECK Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-mock pytest-timeout
+
+      - name: Create required directories
+        run: |
+          mkdir -p ./archive/EPOCH5/agents
+          mkdir -p ./archive/EPOCH5/logs/strategydeck
+          mkdir -p ./archive/EPOCH5/improvement_data
+
+      - name: Run StrategyDECK agent tests
+        run: |
+          pytest tests/test_strategydeck_agent.py -v --cov=strategydeck_agent --cov-report=xml:strategydeck-coverage.xml
+
+      - name: Test StrategyDECK integration
+        run: |
+          python strategydeck_integration.py register --name="TestAgent"
+          python strategydeck_integration.py execute --goal "Test automation" --priority medium
+          python strategydeck_integration.py improvement status
+
+      - name: Upload StrategyDECK test artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: strategydeck-test-artifacts
+          path: |
+            strategydeck-coverage.xml
+            ./archive/EPOCH5/logs/strategydeck/*.log
+
+  # Integration Testing with Real-world Scenarios
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test, strategydeck-tests]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up test environment
+        run: |
+          bash dev-setup.sh
+
+      - name: Run integration tests
+        run: |
+          python integration.py setup-demo
+          python integration.py validate
+          python integration.py run-workflow
+
+      - name: Test StrategyDECK with EPOCH5 integration
+        run: |
+          python strategydeck_integration.py register
+          python strategydeck_integration.py execute --goal "Workflow optimization" --priority high
+          python strategydeck_integration.py improvement run-cycle
+
+      - name: Upload integration test logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-logs
+          path: ./archive/EPOCH5/logs/
+
+  # Performance Testing
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install locust pytest-benchmark memory-profiler
+
+      - name: Create performance test directory
+        run: mkdir -p performance_results
+
+      - name: Run benchmark tests
+        run: |
+          python -m pytest tests/ --benchmark-only --benchmark-json=performance_results/benchmark.json || true
+
+      - name: Test StrategyDECK agent performance
+        run: |
+          python -c "
+          from strategydeck_agent import StrategyDECKAgent
+          import time
+          
+          agent = StrategyDECKAgent()
+          
+          # Benchmark task execution
+          start_time = time.time()
+          for i in range(50):
+              agent.run_task(
+                  agent.automate_strategy, 
+                  {'goal': f'Test performance {i}', 'priority': 'high'}
+              )
+          
+          duration = time.time() - start_time
+          print(f'Executed 50 tasks in {duration:.2f}s ({duration/50:.2f}s per task)')
+          
+          # Test concurrent execution
+          tasks = [
+              {'task_id': f'task_{i}', 'callable': agent.automate_strategy, 'args': [{'goal': f'Concurrent {i}'}]}
+              for i in range(20)
+          ]
+          
+          start_time = time.time()
+          results = agent.run_concurrent_tasks(tasks)
+          duration = time.time() - start_time
+          
+          print(f'Executed 20 concurrent tasks in {duration:.2f}s ({duration/20:.2f}s per task)')
+          
+          with open('performance_results/strategydeck_benchmark.txt', 'w') as f:
+              f.write(f'Sequential: {duration/50:.2f}s per task\\n')
+              f.write(f'Concurrent: {duration/20:.2f}s per task\\n')
+          "
+
+      - name: Upload performance test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: performance_results/
+
+  # Build and Packaging
+  build:
+    name: Build & Package
+    runs-on: ubuntu-latest
+    needs: [test, integration-tests]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine wheel setuptools
+
+      - name: Build package
+        run: python -m build
+
+      - name: Run package checks
+        run: twine check dist/*
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-packages
+          path: dist/
+
+  # Documentation Generation
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    needs: [test, strategydeck-tests]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser
+
+      - name: Create Sphinx documentation
+        run: |
+          mkdir -p docs
+          cd docs
+          sphinx-quickstart -q --sep --project="EPOCH5 Template" --author="EpochCore5" --language=en
+          cd ..
+
+      - name: Generate API documentation
+        run: |
+          # Update conf.py to include autodoc
+          echo "import os" >> docs/conf.py
+          echo "import sys" >> docs/conf.py
+          echo "sys.path.insert(0, os.path.abspath('..'))" >> docs/conf.py
+          echo "extensions.append('sphinx.ext.autodoc')" >> docs/conf.py
+          echo "extensions.append('sphinx.ext.viewcode')" >> docs/conf.py
+          echo "extensions.append('sphinx.ext.napoleon')" >> docs/conf.py
+          echo "extensions.append('sphinx_autodoc_typehints')" >> docs/conf.py
+          
+          # Generate documentation for core modules
+          sphinx-apidoc -o docs . tests setup.py
+          
+          # Build HTML docs
+          cd docs
+          make html
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: documentation
+          path: docs/_build/html/
+
+  # Deployment Stage (Conditional)
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build, docs, performance-tests, security-scan]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-packages
+          path: dist/
+
+      - name: Download documentation
+        uses: actions/download-artifact@v3
+        with:
+          name: documentation
+          path: docs-site/
+
+      - name: Set release variables
+        id: release_vars
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "tag_prefix=v" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "tag_prefix=rc-" >> $GITHUB_OUTPUT
+          fi
+          # Extract version from package
+          VERSION=$(grep -m 1 -o 'version="[0-9]*\.[0-9]*\.[0-9]*"' setup.cfg | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.release_vars.outputs.tag_prefix }}${{ steps.release_vars.outputs.version }}-${{ steps.release_vars.outputs.timestamp }}
+          name: EPOCH5 Template ${{ steps.release_vars.outputs.environment == 'production' && 'Release' || 'Release Candidate' }} ${{ steps.release_vars.outputs.version }}
+          artifacts: "dist/*"
+          draft: ${{ steps.release_vars.outputs.environment == 'staging' }}
+          prerelease: ${{ steps.release_vars.outputs.environment == 'staging' }}
+          bodyFile: CHANGELOG.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy documentation
+        if: steps.release_vars.outputs.environment == 'production'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs-site
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'docs: update documentation for version ${{ steps.release_vars.outputs.version }}'
+
+  # Notification and Reporting
+  notify:
+    name: Notification & Reports
+    runs-on: ubuntu-latest
+    needs: [deploy, test, security-scan, performance-tests]
+    if: always()
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: all-artifacts/
+
+      - name: Generate summary report
+        run: |
+          echo "# CI/CD Pipeline Summary Report" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Status badges
+          echo "## Status" >> $GITHUB_STEP_SUMMARY
+          echo "* Code Quality: ${{ needs.code-quality.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "* Security Scan: ${{ needs.security-scan.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "* Tests: ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "* StrategyDECK Tests: ${{ needs.strategydeck-tests.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "* Integration Tests: ${{ needs.integration-tests.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "* Performance Tests: ${{ needs.performance-tests.result == 'success' && '✅ Passed' || needs.performance-tests.result == 'skipped' && '⏩ Skipped' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "* Deployment: ${{ needs.deploy.result == 'success' && '✅ Deployed' || needs.deploy.result == 'skipped' && '⏩ Skipped' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Details" >> $GITHUB_STEP_SUMMARY
+          
+          # Get test summary if available
+          if [ -f "all-artifacts/test-results-${{ env.PYTHON_VERSION }}-ubuntu-latest/test-results.xml" ]; then
+            TEST_COUNT=$(grep -c "testcase " "all-artifacts/test-results-${{ env.PYTHON_VERSION }}-ubuntu-latest/test-results.xml")
+            FAILURE_COUNT=$(grep -c "failure" "all-artifacts/test-results-${{ env.PYTHON_VERSION }}-ubuntu-latest/test-results.xml")
+            echo "* Tests: $TEST_COUNT tests, $FAILURE_COUNT failures" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Get coverage if available
+          if [ -f "all-artifacts/test-results-${{ env.PYTHON_VERSION }}-ubuntu-latest/coverage.xml" ]; then
+            COVERAGE=$(grep -o 'line-rate="[0-9.]*"' "all-artifacts/test-results-${{ env.PYTHON_VERSION }}-ubuntu-latest/coverage.xml" | head -1 | grep -o '[0-9.]*')
+            COVERAGE_PCT=$(echo "$COVERAGE * 100" | bc)
+            echo "* Coverage: ${COVERAGE_PCT}%" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Security Scan" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "all-artifacts/safety-results/safety-results.json" ]; then
+            VULN_COUNT=$(grep -o '"vulnerabilities": \[[^]]*\]' "all-artifacts/safety-results/safety-results.json" | grep -o "," | wc -l)
+            VULN_COUNT=$((VULN_COUNT + 1))
+            echo "* Vulnerabilities found: $VULN_COUNT" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "* Security scan results not available" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Performance" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "all-artifacts/performance-results/strategydeck_benchmark.txt" ]; then
+            cat "all-artifacts/performance-results/strategydeck_benchmark.txt" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "* Performance test results not available" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.deploy.result }}" == "success" ]]; then
+            echo "* ✅ Deployment successful - Version released" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "* ❌ Tests failed - Fix failing tests" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.security-scan.result }}" != "success" ]]; then
+            echo "* ❌ Security issues found - Address vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "* ⚠️ Review pipeline results and address any issues" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Send notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: ci-notifications
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_TITLE: EPOCH5 CI/CD Pipeline Complete
+          SLACK_MESSAGE: |
+            *Repository:* ${{ github.repository }}
+            *Branch:* ${{ github.ref_name }}
+            *Commit:* ${{ github.sha }}
+            *Status:* ${{ job.status }}
+            
+            *Code Quality:* ${{ needs.code-quality.result }}
+            *Security Scan:* ${{ needs.security-scan.result }}
+            *Tests:* ${{ needs.test.result }}
+            *Integration Tests:* ${{ needs.integration-tests.result }}
+            *Deployment:* ${{ needs.deploy.result == 'skipped' && 'Not deployed' || needs.deploy.result }}
+            
+            [View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        continue-on-error: true

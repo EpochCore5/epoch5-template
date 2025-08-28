@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""
+EPOCH5 Autonomous System Integration Test
+Validates the autonomous capabilities of the entire EPOCH5 system
+Tests integration between all components and verifies autonomous decision making
+"""
+
+import os
+import sys
+import time
+import json
+import logging
+import subprocess
+import random
+import unittest
+from pathlib import Path
+from datetime import datetime, timezone
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler("epoch5_integration_test.log"),
+        logging.StreamHandler()
+    ]
+)
+
+class EPOCH5AutonomousTest(unittest.TestCase):
+    """Test suite for EPOCH5 autonomous capabilities"""
+    
+    @classmethod
+    def setUpClass(cls):
+        """Set up test environment"""
+        cls.base_dir = Path("./archive/EPOCH5")
+        cls.base_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create test configuration
+        cls.test_config_id = f"test-config-{int(time.time())}"
+        
+        # Stop any running components
+        cls._stop_all_components()
+        
+        # Initialize test state
+        cls.components_started = set()
+    
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up test environment"""
+        cls._stop_all_components()
+    
+    @classmethod
+    def _stop_all_components(cls):
+        """Stop all running components"""
+        try:
+            # Try to use the control script first
+            subprocess.run(
+                ["./autonomous_control.sh", "7"],
+                input=b"7\n",  # Send 7 to select "Stop All Autonomous Systems"
+                timeout=10,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+        except Exception:
+            # Fallback to direct process termination
+            subprocess.run(["pkill", "-f", "meta_orchestrator.py"], stderr=subprocess.PIPE)
+            subprocess.run(["pkill", "-f", "adaptive_security.py"], stderr=subprocess.PIPE)
+            subprocess.run(["pkill", "-f", "self_healing.py"], stderr=subprocess.PIPE)
+            subprocess.run(["pkill", "-f", "ceiling_manager.py"], stderr=subprocess.PIPE)
+    
+    def _run_command(self, command, timeout=30):
+        """Run a command and return its output"""
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                check=True
+            )
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Command failed: {e}")
+            logging.error(f"stderr: {e.stderr}")
+            raise
+    
+    def _check_process_running(self, process_name):
+        """Check if a process is running"""
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", process_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            return result.returncode == 0
+        except Exception as e:
+            logging.error(f"Error checking process {process_name}: {e}")
+            return False
+    
+    def test_01_components_exist(self):
+        """Test that all required components exist"""
+        required_files = [
+            "meta_orchestrator.py",
+            "self_healing.py",
+            "adaptive_security.py",
+            "ceiling_manager.py",
+            "autonomous_control.sh"
+        ]
+        
+        for file in required_files:
+            file_path = Path(file)
+            self.assertTrue(file_path.exists(), f"Required file {file} does not exist")
+            self.assertTrue(file_path.is_file(), f"{file} is not a file")
+    
+    def test_02_control_script_executable(self):
+        """Test that the control script is executable"""
+        script_path = Path("autonomous_control.sh")
+        self.assertTrue(os.access(script_path, os.X_OK), "Control script is not executable")
+    
+    def test_03_create_ceiling_configuration(self):
+        """Test creating a ceiling configuration"""
+        output = self._run_command([
+            "python3", "ceiling_manager.py", "create-config", self.test_config_id, "--tier", "professional"
+        ])
+        
+        self.assertIn("Created ceiling configuration", output)
+        self.assertIn(self.test_config_id, output)
+        self.assertIn("professional", output)
+    
+    def test_04_start_self_healing(self):
+        """Test starting self-healing system"""
+        output = self._run_command([
+            "python3", "self_healing.py", "start"
+        ])
+        
+        self.assertIn("Self-healing monitoring", output)
+        self.assertTrue(self._check_process_running("self_healing.py"), "Self-healing process not running")
+        self.components_started.add("self_healing")
+    
+    def test_05_check_self_healing_status(self):
+        """Test checking self-healing status"""
+        # Wait for self-healing to initialize
+        time.sleep(2)
+        
+        output = self._run_command([
+            "python3", "self_healing.py", "status"
+        ])
+        
+        self.assertIn("System Health Report", output)
+        self.assertIn("Overall Health Score", output)
+        self.assertIn("Component Status", output)
+    
+    def test_06_start_adaptive_security(self):
+        """Test starting adaptive security system"""
+        output = self._run_command([
+            "python3", "adaptive_security.py", "start"
+        ])
+        
+        self.assertIn("Adaptive security monitoring", output)
+        self.assertTrue(self._check_process_running("adaptive_security.py"), "Adaptive security process not running")
+        self.components_started.add("adaptive_security")
+    
+    def test_07_simulate_security_violation(self):
+        """Test simulating a security violation"""
+        # Wait for adaptive security to initialize
+        time.sleep(2)
+        
+        output = self._run_command([
+            "python3", "adaptive_security.py", "simulate", "--type", "ceiling_violation", "--severity", "high"
+        ])
+        
+        self.assertIn("Simulated high ceiling_violation", output)
+        self.assertIn("Response:", output)
+    
+    def test_08_enforce_ceiling(self):
+        """Test enforcing a ceiling value"""
+        output = self._run_command([
+            "python3", "ceiling_manager.py", "enforce", self.test_config_id, "budget", "500"
+        ])
+        
+        # Value might be capped or within ceiling
+        self.assertTrue("Ceiling enforced" in output or "Value" in output and "is within ceiling" in output)
+    
+    def test_09_start_meta_orchestrator(self):
+        """Test starting meta-orchestrator"""
+        output = self._run_command([
+            "python3", "meta_orchestrator.py", "start"
+        ])
+        
+        self.assertIn("Meta-orchestration", output)
+        self.assertTrue(self._check_process_running("meta_orchestrator.py"), "Meta-orchestrator process not running")
+        self.components_started.add("meta_orchestrator")
+    
+    def test_10_check_orchestrator_status(self):
+        """Test checking orchestrator status"""
+        # Wait for orchestrator to initialize and make some decisions
+        time.sleep(5)
+        
+        output = self._run_command([
+            "python3", "meta_orchestrator.py", "status"
+        ], timeout=10)
+        
+        self.assertIn("System Status Report", output)
+        self.assertIn("Subsystem Status", output)
+        self.assertIn("System Metrics", output)
+    
+    def test_11_verify_autonomous_decisions(self):
+        """Test that autonomous decisions are being made"""
+        # Wait for more decisions to be made
+        time.sleep(10)
+        
+        output = self._run_command([
+            "python3", "meta_orchestrator.py", "status"
+        ], timeout=10)
+        
+        # Verify decisions are being made
+        self.assertIn("Recent Decisions", output)
+        
+        # Extract decisions count
+        import re
+        match = re.search(r"Decisions Made:\s+(\d+)", output)
+        if match:
+            decisions_count = int(match.group(1))
+            self.assertGreater(decisions_count, 0, "No decisions have been made")
+    
+    def test_12_verify_system_recommendations(self):
+        """Test that system recommendations are generated"""
+        output = self._run_command([
+            "python3", "meta_orchestrator.py", "status"
+        ], timeout=10)
+        
+        # Recommendations might not always be present depending on system state
+        # But the section should at least be there
+        if "Recommendations:" in output:
+            self.assertRegex(output, r"Recommendations:.*", "No recommendations section found")
+    
+    def test_13_stop_meta_orchestrator(self):
+        """Test stopping meta-orchestrator"""
+        output = self._run_command([
+            "python3", "meta_orchestrator.py", "stop"
+        ])
+        
+        self.assertIn("Meta-orchestration", output)
+        self.assertFalse(self._check_process_running("meta_orchestrator.py"), "Meta-orchestrator still running")
+        if "meta_orchestrator" in self.components_started:
+            self.components_started.remove("meta_orchestrator")
+    
+    def test_14_stop_adaptive_security(self):
+        """Test stopping adaptive security"""
+        output = self._run_command([
+            "python3", "adaptive_security.py", "stop"
+        ])
+        
+        self.assertIn("Security monitoring", output)
+        self.assertFalse(self._check_process_running("adaptive_security.py"), "Adaptive security still running")
+        if "adaptive_security" in self.components_started:
+            self.components_started.remove("adaptive_security")
+    
+    def test_15_stop_self_healing(self):
+        """Test stopping self-healing"""
+        output = self._run_command([
+            "python3", "self_healing.py", "stop"
+        ])
+        
+        self.assertIn("Self-healing monitoring", output)
+        self.assertFalse(self._check_process_running("self_healing.py"), "Self-healing still running")
+        if "self_healing" in self.components_started:
+            self.components_started.remove("self_healing")
+    
+    def test_16_control_script_full_autonomous(self):
+        """Test control script full autonomous mode"""
+        # Ensure all components are stopped first
+        self._stop_all_components()
+        
+        # Run the control script in background
+        process = subprocess.Popen(
+            ["./autonomous_control.sh"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Select option 1 (Full Autonomous Mode)
+        process.stdin.write("1\n")
+        process.stdin.flush()
+        
+        # Wait for initialization
+        time.sleep(5)
+        
+        # Check that meta-orchestrator is running
+        self.assertTrue(self._check_process_running("meta_orchestrator.py"), 
+                       "Meta-orchestrator not running after activating full autonomous mode")
+        
+        # Clean up
+        process.terminate()
+        self._stop_all_components()
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

@@ -1,0 +1,132 @@
+name: Test Coverage Report
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop, 'feature/**']
+
+jobs:
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov coverage-badge
+      
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=. --cov-report=xml --cov-report=term-missing
+      
+      - name: Generate coverage badge
+        run: |
+          coverage-badge -o coverage-badge.svg -f
+      
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage.xml
+      
+      - name: Upload coverage badge
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-badge
+          path: coverage-badge.svg
+      
+      - name: Check coverage threshold
+        run: |
+          echo "COVERAGE_PCT=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(float(root.attrib['line-rate']) * 100)")" >> $GITHUB_ENV
+          echo "Coverage: ${{ env.COVERAGE_PCT }}%"
+          if (( $(echo "${{ env.COVERAGE_PCT }} < 80" | bc -l) )); then
+            echo "::warning::Test coverage is below 80%: ${{ env.COVERAGE_PCT }}%"
+          else
+            echo "::notice::Test coverage meets target: ${{ env.COVERAGE_PCT }}%"
+          fi
+      
+      - name: Comment PR with coverage
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          header: test-coverage
+          message: |
+            ## Test Coverage: ${{ env.COVERAGE_PCT }}%
+            
+            ${
+              parseFloat(process.env.COVERAGE_PCT) < 80 
+              ? '❌ **Warning:** Coverage is below the 80% target. Please add more tests!'
+              : '✅ **Success:** Coverage meets or exceeds the 80% target.'
+            }
+            
+            <details>
+              <summary>Coverage Details</summary>
+              
+              ```
+              $(cat coverage-report.txt)
+              ```
+            </details>
+      
+      - name: Report coverage as job summary
+        run: |
+          echo "## Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "* Overall Coverage: ${{ env.COVERAGE_PCT }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage by File" >> $GITHUB_STEP_SUMMARY
+          python -c "
+          import xml.etree.ElementTree as ET
+          from tabulate import tabulate
+          
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          
+          package = root.find('.//package')
+          classes = package.findall('./classes/class')
+          
+          table_data = []
+          for cls in classes:
+              filename = cls.attrib['filename']
+              line_rate = float(cls.attrib['line-rate']) * 100
+              table_data.append([filename, f'{line_rate:.2f}%'])
+          
+          table_data.sort(key=lambda x: float(x[1].rstrip('%')))
+          
+          print(tabulate(table_data, headers=['File', 'Coverage'], tablefmt='pipe'))
+          " >> $GITHUB_STEP_SUMMARY
+      
+      - name: Check if badge needs updating
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: badge_update
+        run: |
+          mkdir -p docs/badges
+          cp coverage-badge.svg docs/badges/
+          
+          if git diff --quiet docs/badges/coverage-badge.svg; then
+            echo "Badge unchanged"
+            echo "badge_changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Badge changed"
+            echo "badge_changed=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit updated badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.badge_update.outputs.badge_changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/badges/coverage-badge.svg
+          git commit -m "Update coverage badge [skip ci]"
+          git push

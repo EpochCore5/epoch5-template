@@ -1,0 +1,377 @@
+===== EPOCH5 AUDIT SCROLL =====
+Generated at: 2025-08-28T10:07:06.729886+00:00
+Events: 37
+==============================
+
+[2025-08-28T10:07:06.725473+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: 7168abb2a7debc79b3f483078ac62fd6cfd103d77fa98a93c60cf394dfacd6f9
+
+[2025-08-28T10:07:06.711629+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 80f959e856385fede89f40fb1b1516ee8e3a6c94b1f8217c2c3347ebdb1eed16
+
+[2025-08-28T10:07:06.689203+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 205516eeb5a621b65af707567329d5d89cb6f6082f22706b3b095b5bd714b313
+
+[2025-08-28T10:06:51.920230+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: deb3ff65f853bf94dbdff34fbd9783108fe54e770c827640b7785001ae8f3f22
+
+[2025-08-28T10:06:51.910733+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 16fbf579de3b4b83b2a8b7388327f1258bc7f02df5d1f412dc842b2a8615e83d
+
+[2025-08-28T10:06:51.887355+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 51f2b226c2528991aff85aeca383fe89a5249ba32e3e81a9b22c1f31a10fdd07
+
+[2025-08-28T10:01:06.654783+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: 9e6468e03cdf3ba445d193d25d4822987ca6496e1c81f153ea5ed50c2f871cab
+
+[2025-08-28T10:01:06.645108+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: aef60d739a5abcf7a3bf2783ad98c72ec0506f14de443bd759a44a11e65e0171
+
+[2025-08-28T10:01:06.626256+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: d81398da22a0f6bd7f86b306dc74aa6c0eb376e1c030dcca77d3ba8dc54b1413
+
+[2025-08-28T09:58:54.538203+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: 52912129fd42630f21dc720bc1184c6e9955599761152974ef2fdb7a912f8e82
+
+[2025-08-28T09:58:54.528659+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 7c0d21f430aaf170fc5da5e34dc474d48cc47086d68ab31fdb97a3b54b781f55
+
+[2025-08-28T09:58:54.509074+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 5c7488f79d8fe77e8d6c935dc1127abc592ff6ebe16f079b83f96a9de696f78e
+
+[2025-08-28T09:58:37.056892+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: a7bcfb921d41bf7bc77906dffe54d489eb066970c02394e352d9b27f57106895
+
+[2025-08-28T09:58:37.048196+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 5469b499799d9e506b2024f326dcd161eb532369842b3ffdb2ca9b757879d13e
+
+[2025-08-28T09:58:37.028548+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: c5e480ec62531c46bbe8d45e75b908a9b9a26a8d3b492a04f60f1b37668cb7ac
+
+[2025-08-28T09:57:21.679603+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: 5c20d0b2ce95ddb82e58bf3a028deefec3cd832545de9280cac93f1bc3884e65
+
+[2025-08-28T09:57:21.667866+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 78d24260a06f29f2016d4618780aba4f16d14c6d54003d6f95d465da72ed2d98
+
+[2025-08-28T09:57:21.649758+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 57e6e8b329bc6b3619d65fbed4a68e33dd65d0cda70621e53eafb83568e33ddc
+
+[2025-08-28T09:55:20.945138+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: aeef292253e53f2f52da715c3aa99c07cf8c83522472947f19ca7436fd210e50
+
+[2025-08-28T09:55:20.935175+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 358894e1ba1cb0b622a0c35255d7d8a301d45a8751d142771d5cf5a8e81e4fbf
+
+[2025-08-28T09:55:20.888274+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 523bf1228a7ca9f8c0cd316f6535a36d73d196ac2219900332cc5631ad79e6cc
+
+[2025-08-28T09:53:31.872288+00:00] ceiling_enforcement: Ceiling enforced on task_priority for agent:agent-123: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": "agent-123"
+}
+  Seal: f2738cb4d7a812af0a062113c0c6370caa9fd358b35d97c7b4a9962831e99fa2
+
+[2025-08-28T09:53:31.863905+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: e133a24384d83edf7883e10630c4d541550731c237402cad9591d1f9d37015a7
+
+[2025-08-28T09:53:31.814970+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 7040b331b33a3ecdbb8b9b0f5d74b960b228f3893900e822c461c9ed9738b914
+
+[2025-08-28T09:11:26.931426+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: ac10c246a9be2c9a0b75813584b652c46ab63961aca09173d9762ee919b2243f
+
+[2025-08-28T09:11:26.908728+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 8930696b26d1d5e0918669ea622c1866d31088683502a1007ef7ff112884a7c2
+
+[2025-08-28T09:10:58.343978+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 40211bf53f091de52d4d2f520f27db2655e1bff9c86bcf9c65f83d2f6169f64e
+
+[2025-08-28T09:10:58.322836+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 82612fedac19677e1222e1460248e4e80100983a4f40b5cb74181664abd5b66e
+
+[2025-08-28T09:08:40.905648+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 088fce4a86952f1be2a14d887361d1b81c8788a5cc46022836ecb56e214fe165
+
+[2025-08-28T09:08:40.884131+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 1a86b4a9e0c78be6fff8281ad5be6f6eed7c57c0461e1347e624b6c6918a475c
+
+[2025-08-28T08:52:16.951498+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 76732b0f6651754b0e4faf6510c66c8db8b665e6855bfe1113c8131a04119f4f
+
+[2025-08-28T08:52:16.928311+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 07d34b069098ab5bbbdd7a049d3661d5f80b540e34dd3c36fa9cccc4174975a1
+
+[2025-08-28T06:24:40.477189+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 54e96eaae0887ee144a8be8419e796bef3054492d01dde519f701bb912074ea1
+
+[2025-08-28T06:24:40.466461+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: ffde034cb726de9c0a5421bd97ff3ddc9c888919053a5f5b789662b7b243b181
+
+[2025-08-28T06:24:22.858544+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: f6ce6a43255c077ad1baa8bde7e50623842e4161be6811d3ad5a09bcfb7869ae
+
+[2025-08-28T06:24:00.847283+00:00] ceiling_enforcement: Ceiling enforced on resource_allocation for system: 120 → 100
+  Data: {
+  "value_type": "resource_allocation",
+  "original_value": 120,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: f11e246049d7e0eed0158b90326e3e88c419380229a151535b4332a51dc98eff
+
+[2025-08-28T06:24:00.838600+00:00] ceiling_enforcement: Ceiling enforced on task_priority for system: 150 → 100
+  Data: {
+  "value_type": "task_priority",
+  "original_value": 150,
+  "capped_value": 100,
+  "ceiling": 100,
+  "agent_did": null
+}
+  Seal: 2a53534e38c65fce00b2678da564076cdaf3a7975472176bffa7b587a58dd442
+
+==============================
+Scroll Seal: fcb9c5509bd5657473463c671038963596981409c9b827536e9c4dc2def411c6

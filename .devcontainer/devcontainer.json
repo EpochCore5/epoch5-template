@@ -1,0 +1,59 @@
+{
+    "name": "EPOCH5 Development",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "app",
+    "workspaceFolder": "/workspaces/epoch5-template",
+    "shutdownAction": "stopCompose",
+    
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.black-formatter",
+                "ms-python.flake8",
+                "ms-python.mypy-type-checker",
+                "matangover.mypy",
+                "charliermarsh.ruff",
+                "njpwerner.autodocstring",
+                "mhutchie.git-graph",
+                "github.copilot",
+                "github.vscode-pull-request-github",
+                "ms-azuretools.vscode-docker"
+            ],
+            "settings": {
+                "python.pythonPath": "/usr/local/bin/python",
+                "python.linting.enabled": true,
+                "python.linting.flake8Enabled": true,
+                "python.formatting.provider": "black",
+                "python.testing.pytestEnabled": true,
+                "python.testing.nosetestsEnabled": false,
+                "python.testing.unittestEnabled": false,
+                "editor.formatOnSave": true,
+                "editor.rulers": [88],
+                "python.testing.pytestArgs": [
+                    "tests"
+                ],
+                "git.enableCommitSigning": true,
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "/bin/bash"
+                    }
+                }
+            }
+        }
+    },
+    
+    "postCreateCommand": "pip install -r requirements.txt && pre-commit install && python -m pytest",
+    
+    "remoteUser": "vscode",
+    
+    "forwardPorts": [8080],
+    "portsAttributes": {
+        "8080": {
+            "label": "Ceiling Dashboard",
+            "onAutoForward": "notify"
+        }
+    }
+}

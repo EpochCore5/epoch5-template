@@ -1,0 +1,3 @@
+{"ts": "2025-08-28T10:06:51.935675+00:00", "event": "gbtepoch_init", "note": "Initialized GBTEpoch reference at 1756375611", "epoch": 1756375611, "seal": "7161bbd09625122a6d4ffeb505332ae0cf92da29b0893d9f3725e3734e99f015"}
+This is not valid JSON
+{"ts": "2025-08-28T10:06:51.937699+00:00", "event": "seal_verification", "note": "Seal verification PASSED: 1 valid, 0 invalid", "epoch": 1756375611, "data": {"verified_count": 1, "valid_count": 1, "invalid_count": 0, "verification_status": "PASSED"}, "seal": "1359aea481fbff117ab66eb915cf0703a6d2ad982d245bdd879e82c2569f42a1"}

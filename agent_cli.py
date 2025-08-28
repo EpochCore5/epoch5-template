@@ -1,0 +1,466 @@
+#!/usr/bin/env python3
+"""
+Agent Communication CLI
+
+A simple command-line tool for communicating with and monitoring agents in the EPOCH5 ecosystem.
+Provides a more accessible interface compared to the full dashboard.
+"""
+
+import argparse
+import json
+import time
+import sys
+import os
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
+from pathlib import Path
+import textwrap
+
+# Import from agent_monitor.py
+from agent_monitor import AgentMonitor, AgentMessage
+
+
+def print_colored(text: str, color: str = "default"):
+    """Print colored text to the console"""
+    colors = {
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "blue": "\033[94m",
+        "magenta": "\033[95m",
+        "cyan": "\033[96m",
+        "white": "\033[97m",
+        "default": "\033[0m",
+    }
+    
+    end_color = "\033[0m"
+    color_code = colors.get(color.lower(), colors["default"])
+    
+    print(f"{color_code}{text}{end_color}")
+
+
+def print_table(headers: List[str], rows: List[List[str]], color_map: Dict[str, str] = None):
+    """Print a formatted table to the console"""
+    if not rows:
+        print_colored("No data to display", "yellow")
+        return
+    
+    # Calculate column widths
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < len(col_widths):
+                col_widths[i] = max(col_widths[i], len(str(cell)))
+    
+    # Print header
+    header_fmt = " | ".join(f"{{:{w}}}" for w in col_widths)
+    print_colored(header_fmt.format(*headers), "cyan")
+    
+    # Print separator
+    separator = "-+-".join("-" * w for w in col_widths)
+    print_colored(separator, "cyan")
+    
+    # Print rows
+    for row in rows:
+        row_data = [str(cell) for cell in row]
+        row_fmt = " | ".join(f"{{:{w}}}" for w in col_widths)
+        
+        # Apply color if specified
+        if color_map and row_data and row_data[0] in color_map:
+            print_colored(row_fmt.format(*row_data), color_map[row_data[0]])
+        else:
+            print(row_fmt.format(*row_data))
+
+
+def format_status_emoji(status: str) -> str:
+    """Format status as emoji"""
+    status_map = {
+        "Online": "🟢",
+        "Offline": "🔴",
+        "Unknown": "❔",
+        "success": "✅",
+        "error": "❌",
+        "warning": "⚠️",
+    }
+    
+    return status_map.get(status, status)
+
+
+def format_time_ago(timestamp_str: str) -> str:
+    """Format timestamp as time ago"""
+    try:
+        timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        now = datetime.now().astimezone()
+        delta = now - timestamp
+        
+        if delta < timedelta(minutes=1):
+            return "just now"
+        elif delta < timedelta(hours=1):
+            minutes = int(delta.total_seconds() / 60)
+            return f"{minutes} min ago"
+        elif delta < timedelta(days=1):
+            hours = int(delta.total_seconds() / 3600)
+            return f"{hours} hours ago"
+        else:
+            days = delta.days
+            return f"{days} days ago"
+    except:
+        return "unknown"
+
+
+def list_agents(monitor: AgentMonitor, verbose: bool = False):
+    """List all registered agents"""
+    agents = monitor.get_all_agent_statuses()
+    
+    if not agents:
+        print_colored("No agents registered", "yellow")
+        return
+    
+    if verbose:
+        # Detailed view
+        for did, agent in agents.items():
+            agent_data = agent["agent_data"]
+            status = "Online" if agent["is_online"] else "Offline"
+            status_emoji = format_status_emoji(status)
+            
+            print_colored(f"\n{status_emoji} Agent: {did}", "cyan")
+            print(f"  Type: {agent_data.get('type', 'unknown')}")
+            print(f"  Status: {status}")
+            print(f"  Reliability: {agent_data.get('reliability_score', 0):.2f}")
+            print(f"  Tasks: {agent_data.get('successful_tasks', 0)}/{agent_data.get('total_tasks', 0)}")
+            print(f"  Last Heartbeat: {format_time_ago(agent_data.get('last_heartbeat', ''))}")
+            print(f"  Skills: {', '.join(agent_data.get('skills', []))}")
+    else:
+        # Table view
+        headers = ["Status", "Agent ID", "Type", "Reliability", "Tasks", "Last Heartbeat"]
+        rows = []
+        
+        for did, agent in agents.items():
+            agent_data = agent["agent_data"]
+            status = "Online" if agent["is_online"] else "Offline"
+            status_emoji = format_status_emoji(status)
+            
+            rows.append([
+                status_emoji,
+                did[:16] + "...",
+                agent_data.get("type", "unknown"),
+                f"{agent_data.get('reliability_score', 0):.2f}",
+                f"{agent_data.get('successful_tasks', 0)}/{agent_data.get('total_tasks', 0)}",
+                format_time_ago(agent_data.get("last_heartbeat", ""))
+            ])
+        
+        color_map = {
+            "🟢": "green",
+            "🔴": "red",
+            "❔": "yellow"
+        }
+        
+        print_table(headers, rows, color_map)
+
+
+def show_agent_details(monitor: AgentMonitor, did: str):
+    """Show detailed information for a specific agent"""
+    agent = monitor.get_agent_status(did)
+    
+    if not agent:
+        print_colored(f"Agent {did} not found", "red")
+        return
+    
+    agent_data = agent["agent_data"]
+    status = "Online" if agent["is_online"] else "Offline"
+    status_emoji = format_status_emoji(status)
+    
+    print_colored(f"\n{status_emoji} Agent Details", "cyan")
+    print_colored("=" * 50, "cyan")
+    print(f"Agent ID: {did}")
+    print(f"Type: {agent_data.get('type', 'unknown')}")
+    print(f"Status: {status}")
+    print(f"Created At: {agent_data.get('created_at', 'unknown')}")
+    print(f"Last Heartbeat: {agent_data.get('last_heartbeat', 'unknown')} ({format_time_ago(agent_data.get('last_heartbeat', ''))})")
+    
+    print_colored("\nPerformance Metrics", "cyan")
+    print(f"Reliability Score: {agent_data.get('reliability_score', 0):.2f}")
+    print(f"Average Latency: {agent_data.get('average_latency', 0):.2f}s")
+    print(f"Total Tasks: {agent_data.get('total_tasks', 0)}")
+    print(f"Successful Tasks: {agent_data.get('successful_tasks', 0)}")
+    
+    print_colored("\nAgent Capabilities", "cyan")
+    print(f"Skills: {', '.join(agent_data.get('skills', []))}")
+    
+    # Show performance history
+    history = monitor.get_agent_performance_history(did)
+    if history:
+        print_colored("\nRecent Performance", "cyan")
+        for i, entry in enumerate(history[-5:]):
+            print(f"  {format_time_ago(entry['timestamp'])}: Reliability={entry['reliability']:.2f}, Latency={entry['latency']:.2f}s")
+
+
+def send_command_to_agent(monitor: AgentMonitor, did: str, command: str, parameters_str: str = None):
+    """Send a command to a specific agent"""
+    # Parse parameters
+    parameters = {}
+    if parameters_str:
+        try:
+            parameters = json.loads(parameters_str)
+        except json.JSONDecodeError:
+            print_colored("Invalid JSON parameters", "red")
+            return
+    
+    # Check if agent exists
+    agent = monitor.get_agent_status(did)
+    if not agent:
+        print_colored(f"Agent {did} not found", "red")
+        return
+    
+    # Send command
+    message_id = monitor.send_command(did, command, parameters)
+    
+    if message_id:
+        print_colored(f"Command sent to agent {did}", "green")
+        print(f"Message ID: {message_id}")
+        print(f"Command: {command}")
+        print(f"Parameters: {parameters}")
+    else:
+        print_colored(f"Failed to send command to agent {did}", "red")
+
+
+def broadcast_command_to_agents(monitor: AgentMonitor, command: str, parameters_str: str = None, 
+                               agent_type: str = None, skills: str = None):
+    """Broadcast a command to multiple agents"""
+    # Parse parameters
+    parameters = {}
+    if parameters_str:
+        try:
+            parameters = json.loads(parameters_str)
+        except json.JSONDecodeError:
+            print_colored("Invalid JSON parameters", "red")
+            return
+    
+    # Create filter
+    agent_filter = {}
+    if agent_type:
+        agent_filter["agent_type"] = agent_type
+    
+    if skills:
+        skills_list = [s.strip() for s in skills.split(",")]
+        agent_filter["skills"] = skills_list
+    
+    # Send command
+    sent_count = monitor.broadcast_command(command, parameters, agent_filter)
+    
+    if sent_count > 0:
+        print_colored(f"Command broadcast to {sent_count} agents", "green")
+        print(f"Command: {command}")
+        print(f"Parameters: {parameters}")
+        print(f"Filter: {agent_filter}")
+    else:
+        print_colored("No agents received the command", "yellow")
+        print("Check your filter criteria or agent availability")
+
+
+def assign_task_to_agent(monitor: AgentMonitor, task_data_str: str, agent_type: str = None, skills: str = None):
+    """Assign a task to the most suitable agent"""
+    # Parse task data
+    try:
+        task_data = json.loads(task_data_str)
+    except json.JSONDecodeError:
+        print_colored("Invalid JSON task data", "red")
+        return
+    
+    # Create filter
+    agent_filter = {}
+    if agent_type:
+        agent_filter["agent_type"] = agent_type
+    
+    if skills:
+        skills_list = [s.strip() for s in skills.split(",")]
+        agent_filter["skills"] = skills_list
+    
+    # Assign task
+    agent_did, message_id = monitor.assign_task(task_data, agent_filter)
+    
+    if agent_did:
+        print_colored(f"Task assigned to agent {agent_did}", "green")
+        print(f"Message ID: {message_id}")
+        print(f"Task Data: {task_data}")
+    else:
+        print_colored("No suitable agent found for this task", "yellow")
+        print("Check your filter criteria or agent availability")
+
+
+def monitor_agents(monitor: AgentMonitor, interval: int = 5, count: int = None):
+    """Monitor agents in real-time"""
+    print_colored("Starting real-time agent monitoring", "cyan")
+    print_colored("Press Ctrl+C to stop", "yellow")
+    print()
+    
+    try:
+        iteration = 0
+        while count is None or iteration < count:
+            # Clear screen
+            os.system('cls' if os.name == 'nt' else 'clear')
+            
+            # Print header
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print_colored(f"EPOCH5 Agent Monitor - {now}", "cyan")
+            print_colored("=" * 50, "cyan")
+            
+            # List agents
+            list_agents(monitor)
+            
+            # Print footer
+            print()
+            print_colored(f"Refreshing every {interval} seconds. Press Ctrl+C to stop.", "yellow")
+            
+            # Wait for next update
+            time.sleep(interval)
+            iteration += 1
+    
+    except KeyboardInterrupt:
+        print()
+        print_colored("Monitoring stopped", "yellow")
+
+
+def export_agent_data(monitor: AgentMonitor, output_file: str):
+    """Export agent performance data to a file"""
+    success = monitor.export_performance_data(output_file)
+    
+    if success:
+        print_colored(f"Agent performance data exported to {output_file}", "green")
+    else:
+        print_colored("Failed to export agent performance data", "red")
+
+
+def show_help():
+    """Show help information"""
+    help_text = """
+    EPOCH5 Agent Communication CLI
+
+    Available Commands:
+    ------------------
+    list                    List all registered agents
+    info <did>              Show detailed information for a specific agent
+    send <did> <command>    Send a command to a specific agent
+    broadcast <command>     Broadcast a command to multiple agents
+    assign                  Assign a task to the most suitable agent
+    monitor                 Monitor agents in real-time
+    export <file>           Export agent performance data to a file
+    help                    Show this help information
+
+    Examples:
+    --------
+    # List all agents
+    python agent_cli.py list --verbose
+
+    # Show details for a specific agent
+    python agent_cli.py info did:epoch5:strategydeck:abcd1234
+
+    # Send a command to an agent
+    python agent_cli.py send did:epoch5:strategydeck:abcd1234 status --parameters='{"detailed": true}'
+
+    # Broadcast a command to all StrategyDECK agents
+    python agent_cli.py broadcast pause --agent-type=strategydeck
+
+    # Assign a task to an agent with specific skills
+    python agent_cli.py assign --task-data='{"goal": "Optimize resources"}' --skills=strategy_automation,resource_management
+
+    # Monitor agents in real-time
+    python agent_cli.py monitor --interval=10
+
+    # Export agent performance data
+    python agent_cli.py export agent_performance.csv
+    """
+    
+    print(textwrap.dedent(help_text))
+
+
+def main():
+    """Main entry point for agent CLI"""
+    parser = argparse.ArgumentParser(description="EPOCH5 Agent Communication CLI")
+    parser.add_argument("--base-dir", default="./archive/EPOCH5", help="Base directory for EPOCH5 systems")
+    
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    
+    # List command
+    list_parser = subparsers.add_parser("list", help="List all registered agents")
+    list_parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed information")
+    
+    # Info command
+    info_parser = subparsers.add_parser("info", help="Show detailed information for a specific agent")
+    info_parser.add_argument("did", help="Agent DID")
+    
+    # Send command
+    send_parser = subparsers.add_parser("send", help="Send a command to a specific agent")
+    send_parser.add_argument("did", help="Agent DID")
+    send_parser.add_argument("command", help="Command to send")
+    send_parser.add_argument("--parameters", help="Command parameters (JSON)")
+    
+    # Broadcast command
+    broadcast_parser = subparsers.add_parser("broadcast", help="Broadcast a command to multiple agents")
+    broadcast_parser.add_argument("command", help="Command to broadcast")
+    broadcast_parser.add_argument("--parameters", help="Command parameters (JSON)")
+    broadcast_parser.add_argument("--agent-type", help="Filter by agent type")
+    broadcast_parser.add_argument("--skills", help="Filter by skills (comma-separated)")
+    
+    # Assign command
+    assign_parser = subparsers.add_parser("assign", help="Assign a task to the most suitable agent")
+    assign_parser.add_argument("--task-data", required=True, help="Task data (JSON)")
+    assign_parser.add_argument("--agent-type", help="Filter by agent type")
+    assign_parser.add_argument("--skills", help="Filter by skills (comma-separated)")
+    
+    # Monitor command
+    monitor_parser = subparsers.add_parser("monitor", help="Monitor agents in real-time")
+    monitor_parser.add_argument("--interval", type=int, default=5, help="Refresh interval in seconds")
+    monitor_parser.add_argument("--count", type=int, help="Number of refreshes (default: infinite)")
+    
+    # Export command
+    export_parser = subparsers.add_parser("export", help="Export agent performance data to a file")
+    export_parser.add_argument("output_file", help="Output file path")
+    
+    # Help command
+    help_parser = subparsers.add_parser("help", help="Show help information")
+    
+    args = parser.parse_args()
+    
+    # Create agent monitor
+    monitor = AgentMonitor(base_dir=args.base_dir)
+    
+    try:
+        if args.command == "list":
+            list_agents(monitor, args.verbose)
+            
+        elif args.command == "info":
+            show_agent_details(monitor, args.did)
+            
+        elif args.command == "send":
+            send_command_to_agent(monitor, args.did, args.command, args.parameters)
+            
+        elif args.command == "broadcast":
+            broadcast_command_to_agents(monitor, args.command, args.parameters, args.agent_type, args.skills)
+            
+        elif args.command == "assign":
+            assign_task_to_agent(monitor, args.task_data, args.agent_type, args.skills)
+            
+        elif args.command == "monitor":
+            monitor_agents(monitor, args.interval, args.count)
+            
+        elif args.command == "export":
+            export_agent_data(monitor, args.output_file)
+            
+        elif args.command == "help":
+            show_help()
+            
+        else:
+            show_help()
+            
+    except KeyboardInterrupt:
+        print()
+        print_colored("Operation interrupted by user", "yellow")
+    except Exception as e:
+        print_colored(f"Error: {str(e)}", "red")
+    finally:
+        monitor.shutdown()
+
+
+if __name__ == "__main__":
+    main()
