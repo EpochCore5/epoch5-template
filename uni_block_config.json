@@ -1,0 +1,61 @@
+{
+  "rules": [
+    {
+      "rule_id": "harmful_content_basic",
+      "name": "Basic Harmful Content",
+      "pattern": "\\b(violence|harm|illegal|dangerous)\\b",
+      "severity": "high",
+      "layer": "pattern_match",
+      "enabled": true,
+      "weight": 1.0,
+      "description": "Basic harmful content detection"
+    },
+    {
+      "rule_id": "sensitive_info",
+      "name": "Sensitive Information",
+      "pattern": "\\b(password|secret|token|api[_-]?key)\\b",
+      "severity": "medium",
+      "layer": "pattern_match",
+      "enabled": true,
+      "weight": 1.0,
+      "description": "Sensitive information detection"
+    },
+    {
+      "rule_id": "manipulation_attempt",
+      "name": "Manipulation Attempt",
+      "pattern": "(ignore|forget|disregard).*(previous|instruction|rule)",
+      "severity": "critical",
+      "layer": "semantic_analysis",
+      "enabled": true,
+      "weight": 1.0,
+      "description": "Prompt injection/manipulation detection"
+    },
+    {
+      "rule_id": "system_bypass",
+      "name": "System Bypass Attempt",
+      "pattern": "(system|admin|root).*(override|bypass|disable)",
+      "severity": "critical",
+      "layer": "context_evaluation",
+      "enabled": true,
+      "weight": 1.0,
+      "description": "System security bypass detection"
+    },
+    {
+      "rule_id": "repetitive_pattern",
+      "name": "Repetitive Pattern",
+      "pattern": "(.{1,50})\\1{5,}",
+      "severity": "low",
+      "layer": "behavior_prediction",
+      "enabled": true,
+      "weight": 1.0,
+      "description": "Repetitive or spam pattern detection"
+    }
+  ],
+  "layer_weights": {
+    "pattern_match": 1.0,
+    "semantic_analysis": 2.0,
+    "context_evaluation": 3.0,
+    "behavior_prediction": 4.0,
+    "amplification_check": 5.0
+  }
+}

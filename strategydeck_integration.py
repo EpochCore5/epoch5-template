@@ -44,6 +44,13 @@ try:
 except ImportError:
     SECURITY_SYSTEM_AVAILABLE = False
 
+# Try to import UNI-BLOCK filter system
+try:
+    from uni_block_filter import create_uni_block_filter, UniBlockFilter
+    UNI_BLOCK_AVAILABLE = True
+except ImportError:
+    UNI_BLOCK_AVAILABLE = False
+
 
 class StrategyDECKAgentIntegration:
     """
@@ -129,6 +136,25 @@ class StrategyDECKAgentIntegration:
                 {"agent_name": self.agent_name, "max_workers": max_workers}
             )
         
+        # Initialize UNI-BLOCK Filter System if available
+        self.uni_block_filter = None
+        if UNI_BLOCK_AVAILABLE:
+            try:
+                # Use audit system if available for integration
+                self.uni_block_filter = create_uni_block_filter()
+                self.logger.info("UNI-BLOCK(100x) Filter System initialized")
+                
+                # Log UNI-BLOCK initialization
+                if self.audit_system:
+                    self.audit_system.log_event(
+                        "uni_block_init",
+                        f"UNI-BLOCK Filter initialized for agent '{self.agent_name}'",
+                        {"agent_name": self.agent_name, "filter_enabled": True}
+                    )
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize UNI-BLOCK system: {e}")
+                self.uni_block_filter = None
+        
         # Store agent DID after registration
         self.agent_did = None
         
@@ -157,6 +183,12 @@ class StrategyDECKAgentIntegration:
                 "security_status": self._handle_security_status_command,
                 "verify_integrity": self._handle_verify_integrity_command,
                 "run_audit": self._handle_run_audit_command,
+                # Add UNI-BLOCK command handlers
+                "uni_block_status": self._handle_uni_block_status_command,
+                "uni_block_test": self._handle_uni_block_test_command,
+                "uni_block_stats": self._handle_uni_block_stats_command,
+                "uni_block_add_rule": self._handle_uni_block_add_rule_command,
+                "uni_block_remove_rule": self._handle_uni_block_remove_rule_command,
             }
         
         self.logger.info(f"StrategyDECK Integration initialized with agent '{self.agent_name}'")
@@ -343,6 +375,47 @@ class StrategyDECKAgentIntegration:
         parameters = content.get("parameters", {})
         
         self.logger.info(f"Executing command: {command}")
+        
+        # Apply UNI-BLOCK filtering if available
+        if self.uni_block_filter:
+            # Filter command and parameters for harmful content
+            command_text = f"{command} {json.dumps(parameters)}"
+            filter_result = self.uni_block_filter.filter_output(
+                command_text, 
+                {"agent_name": self.agent_name, "message_id": message_id}
+            )
+            
+            if filter_result.blocked:
+                self.logger.warning(f"Command blocked by UNI-BLOCK: {filter_result.message}")
+                
+                # Log blocked command
+                if self.audit_system:
+                    self.audit_system.log_event(
+                        "command_blocked",
+                        f"Command blocked by UNI-BLOCK: {command}",
+                        {
+                            "message_id": message_id, 
+                            "command": command,
+                            "severity": filter_result.severity.value,
+                            "triggered_rules": filter_result.triggered_rules,
+                            "confidence_score": filter_result.confidence_score
+                        }
+                    )
+                
+                # Send error response instead of executing
+                response = {
+                    "type": "command_response",
+                    "message_id": message_id,
+                    "status": "error",
+                    "error": "Command blocked by security filter",
+                    "details": {
+                        "filter_message": filter_result.message,
+                        "severity": filter_result.severity.value,
+                        "confidence": filter_result.confidence_score
+                    }
+                }
+                self._send_response(response)
+                return
         
         # Log command in audit system
         if self.audit_system:
@@ -818,6 +891,156 @@ class StrategyDECKAgentIntegration:
             "event_count": len(events),
             "events": events
         }
+    
+    # UNI-BLOCK command handlers
+    def _handle_uni_block_status_command(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle uni_block_status command"""
+        if not self.uni_block_filter:
+            return {"status": "error", "message": "UNI-BLOCK system not available"}
+        
+        stats = self.uni_block_filter.get_statistics()
+        rule_count = len(self.uni_block_filter.block_rules)
+        enabled_count = len([r for r in self.uni_block_filter.block_rules.values() if r.enabled])
+        
+        return {
+            "status": "success",
+            "system_status": "active",
+            "total_rules": rule_count,
+            "enabled_rules": enabled_count,
+            "statistics": stats
+        }
+    
+    def _handle_uni_block_test_command(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle uni_block_test command"""
+        if not self.uni_block_filter:
+            return {"status": "error", "message": "UNI-BLOCK system not available"}
+        
+        content = parameters.get("content", "")
+        if not content:
+            return {"status": "error", "message": "No content provided for testing"}
+        
+        context = parameters.get("context", {})
+        context["agent_name"] = self.agent_name
+        
+        # Run filtering
+        result = self.uni_block_filter.filter_output(content, context)
+        
+        # Log test in audit system
+        if self.audit_system:
+            self.audit_system.log_event(
+                "uni_block_test",
+                f"UNI-BLOCK test performed: {'BLOCKED' if result.blocked else 'PASSED'}",
+                {
+                    "agent_did": self.agent_did,
+                    "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+                    "blocked": result.blocked,
+                    "severity": result.severity.value,
+                    "confidence": result.confidence_score
+                }
+            )
+        
+        return {
+            "status": "success",
+            "blocked": result.blocked,
+            "severity": result.severity.value,
+            "confidence_score": result.confidence_score,
+            "triggered_rules": result.triggered_rules,
+            "message": result.message,
+            "layer_results": result.layer_results
+        }
+    
+    def _handle_uni_block_stats_command(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle uni_block_stats command"""
+        if not self.uni_block_filter:
+            return {"status": "error", "message": "UNI-BLOCK system not available"}
+        
+        stats = self.uni_block_filter.get_statistics()
+        
+        # Reset stats if requested
+        if parameters.get("reset", False):
+            self.uni_block_filter.reset_statistics()
+            if self.audit_system:
+                self.audit_system.log_event(
+                    "uni_block_stats_reset",
+                    f"UNI-BLOCK statistics reset by agent {self.agent_did}",
+                    {"agent_did": self.agent_did}
+                )
+            return {"status": "success", "message": "Statistics reset", "previous_stats": stats}
+        
+        return {"status": "success", "statistics": stats}
+    
+    def _handle_uni_block_add_rule_command(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle uni_block_add_rule command"""
+        if not self.uni_block_filter:
+            return {"status": "error", "message": "UNI-BLOCK system not available"}
+        
+        from uni_block_filter import BlockRule, BlockSeverity, FilterLayer
+        
+        try:
+            # Extract rule parameters
+            rule_id = parameters.get("rule_id", "")
+            name = parameters.get("name", "")
+            pattern = parameters.get("pattern", "")
+            severity = parameters.get("severity", "medium")
+            layer = parameters.get("layer", "pattern_match")
+            
+            if not all([rule_id, name, pattern]):
+                return {"status": "error", "message": "Missing required parameters: rule_id, name, pattern"}
+            
+            # Create rule
+            rule = BlockRule(
+                rule_id=rule_id,
+                name=name,
+                pattern=pattern,
+                severity=BlockSeverity(severity),
+                layer=FilterLayer(layer),
+                enabled=parameters.get("enabled", True),
+                weight=parameters.get("weight", 1.0),
+                description=parameters.get("description", "")
+            )
+            
+            # Add rule
+            success = self.uni_block_filter.add_rule(rule)
+            
+            if success:
+                # Log rule addition
+                if self.audit_system:
+                    self.audit_system.log_event(
+                        "uni_block_rule_added",
+                        f"UNI-BLOCK rule added: {rule_id}",
+                        {"agent_did": self.agent_did, "rule_id": rule_id, "severity": severity}
+                    )
+                return {"status": "success", "message": f"Rule '{rule_id}' added successfully"}
+            else:
+                return {"status": "error", "message": f"Failed to add rule '{rule_id}'"}
+                
+        except ValueError as e:
+            return {"status": "error", "message": f"Invalid parameter value: {e}"}
+        except Exception as e:
+            return {"status": "error", "message": f"Error adding rule: {e}"}
+    
+    def _handle_uni_block_remove_rule_command(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle uni_block_remove_rule command"""
+        if not self.uni_block_filter:
+            return {"status": "error", "message": "UNI-BLOCK system not available"}
+        
+        rule_id = parameters.get("rule_id", "")
+        if not rule_id:
+            return {"status": "error", "message": "No rule_id provided"}
+        
+        success = self.uni_block_filter.remove_rule(rule_id)
+        
+        if success:
+            # Log rule removal
+            if self.audit_system:
+                self.audit_system.log_event(
+                    "uni_block_rule_removed",
+                    f"UNI-BLOCK rule removed: {rule_id}",
+                    {"agent_did": self.agent_did, "rule_id": rule_id}
+                )
+            return {"status": "success", "message": f"Rule '{rule_id}' removed successfully"}
+        else:
+            return {"status": "error", "message": f"Rule '{rule_id}' not found"}
     
     def execute_strategy(self, strategy_data: Dict[str, Any], 
                         track_performance: bool = True) -> Dict[str, Any]:
