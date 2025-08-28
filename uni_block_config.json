@@ -49,6 +49,16 @@
       "enabled": true,
       "weight": 1.0,
       "description": "Repetitive or spam pattern detection"
+    },
+    {
+      "rule_id": "test_custom",
+      "name": "Custom Test Rule",
+      "pattern": "\\bcustom_blocked\\b",
+      "severity": "medium",
+      "layer": "pattern_match",
+      "enabled": true,
+      "weight": 1.0,
+      "description": "Test rule for demonstration"
     }
   ],
   "layer_weights": {
