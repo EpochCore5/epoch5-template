@@ -151,3 +151,59 @@ class TestPolicyManager:
         assert isinstance(result, bool)
         # Since agent_reliability (0.9) >= min_reliability (0.8), this should be True
         assert result is True
+
+    def test_get_valid_grants(self, policy_manager):
+        """Test getting valid grants for a DID"""
+        grantee_did = "did:epoch5:test_user"
+        resource = "test_resource"
+        actions = ["read"]
+
+        # Create and add a grant
+        grant = policy_manager.create_grant(
+            "valid_grant_test", grantee_did, resource, actions
+        )
+        policy_manager.add_grant(grant)
+
+        # Get valid grants for the user
+        valid_grants = policy_manager.get_valid_grants(grantee_did)
+        assert isinstance(valid_grants, list)
+        # The grant should be valid (not expired and active)
+        assert len(valid_grants) >= 1
+        assert any(g["grantee_did"] == grantee_did for g in valid_grants)
+
+    def test_load_save_policies(self, policy_manager):
+        """Test policy loading and saving"""
+        # Create a policy
+        policy = policy_manager.create_policy(
+            "load_save_test",
+            PolicyType.RATE_LIMIT,
+            {"max_requests": 50, "time_window": 3600},
+            "Load save test policy",
+        )
+
+        # Add policy (this saves it)
+        policy_manager.add_policy(policy)
+
+        # Load policies and verify
+        policies = policy_manager.load_policies()
+        assert isinstance(policies, dict)
+        assert "policies" in policies
+        assert policy["policy_id"] in policies["policies"]
+
+    def test_load_save_grants(self, policy_manager):
+        """Test grant loading and saving"""
+        grantee_did = "did:epoch5:load_save_user"
+        resource = "load_save_resource"
+        actions = ["write"]
+
+        # Create and add a grant
+        grant = policy_manager.create_grant(
+            "load_save_grant_test", grantee_did, resource, actions
+        )
+        policy_manager.add_grant(grant)
+
+        # Load grants and verify
+        grants = policy_manager.load_grants()
+        assert isinstance(grants, dict)
+        assert "grants" in grants
+        assert grant["grant_id"] in grants["grants"]

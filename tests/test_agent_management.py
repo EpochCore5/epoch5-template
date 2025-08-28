@@ -132,3 +132,55 @@ class TestAgentManager:
 
         result = agent_manager.update_agent_stats(fake_did, True, 50.0)
         assert result is False
+
+    def test_log_heartbeat(self, agent_manager):
+        """Test agent heartbeat logging"""
+        skills = ["heartbeat_test"]
+        agent = agent_manager.create_agent(skills)
+        agent_manager.register_agent(agent)
+
+        # Log heartbeat
+        agent_manager.log_heartbeat(agent["did"], "ONLINE")
+
+        # Check that heartbeat file exists
+        assert agent_manager.heartbeat_file.exists()
+
+        # Check that heartbeat is logged in agent registry
+        updated_agent = agent_manager.get_agent(agent["did"])
+        assert "last_heartbeat" in updated_agent
+
+    def test_detect_anomaly(self, agent_manager):
+        """Test anomaly detection and logging"""
+        skills = ["anomaly_test"]
+        agent = agent_manager.create_agent(skills)
+        agent_manager.register_agent(agent)
+
+        # Detect and log an anomaly
+        anomaly_type = "PERFORMANCE_DEGRADATION"
+        details = "Agent response time exceeded threshold"
+        anomaly = agent_manager.detect_anomaly(agent["did"], anomaly_type, details)
+
+        assert isinstance(anomaly, dict)
+        assert anomaly["did"] == agent["did"]
+        assert anomaly["type"] == anomaly_type
+        assert anomaly["details"] == details
+        assert "timestamp" in anomaly
+        assert "hash" in anomaly
+
+        # Check that anomaly file exists
+        assert agent_manager.anomalies_file.exists()
+
+    def test_get_active_agents(self, agent_manager):
+        """Test getting active agents list"""
+        # Create and register multiple agents
+        agents = []
+        for i in range(2):
+            skills = [f"active_test_{i}"]
+            agent = agent_manager.create_agent(skills)
+            agent_manager.register_agent(agent)
+            agents.append(agent)
+
+        # Get active agents
+        active_agents = agent_manager.get_active_agents()
+        assert len(active_agents) >= 2
+        assert all(agent["status"] == "active" for agent in active_agents)
