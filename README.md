@@ -1,5 +1,8 @@
 # EPOCH5 Template - Enhanced Integration System
 
+> **🚀 Quick Start**: `python integration.py setup-demo` → `python integration.py status` → `bash ceiling_launcher.sh`  
+> **📚 Need Help?** See [GETTING_STARTED.md](GETTING_STARTED.md) for a complete beginner's guide!
+
 A comprehensive tool for logging, agent management, policy enforcement, and secure execution of tasks with advanced provenance tracking.
 
 ---
@@ -150,14 +153,14 @@ Then visit http://localhost:8080 for real-time monitoring and configuration.
 
 ## Testing & Quality Assurance
 
-The project includes comprehensive testing with **67% test coverage**:
+The project includes comprehensive testing with **37% test coverage** and **100% test success rate**:
 
 - **Unit Tests**: Core functionality validation
 - **Integration Tests**: Cross-component compatibility
 - **Security Tests**: Vulnerability scanning
 - **Performance Tests**: Load and stress testing
 
-Current test status: **22 passing tests** out of 33 total tests.
+Current test status: **33 passing tests** out of 33 total tests (all tests now passing!)
 
 Run the test suite:
 ```bash

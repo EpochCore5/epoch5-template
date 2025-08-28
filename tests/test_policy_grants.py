@@ -89,13 +89,18 @@ class TestPolicyManager:
             "conditions": {"valid_until": "2024-12-31T23:59:59Z"},
         }
 
-        grant = policy_manager.create_grant(grant_id, grant_data)
+        grant = policy_manager.create_grant(
+            grant_id, 
+            grant_data["grantee_did"],
+            "test_resource",
+            grant_data["permissions"],
+            grant_data["conditions"]
+        )
 
         assert isinstance(grant, dict)
         assert grant["grant_id"] == grant_id
-        assert grant["grantor_did"] == grant_data["grantor_did"]
         assert grant["grantee_did"] == grant_data["grantee_did"]
-        assert grant["permissions"] == grant_data["permissions"]
+        assert grant["actions"] == grant_data["permissions"]  # Method stores as 'actions'
         assert "created_at" in grant
         assert "active" in grant
 
@@ -107,7 +112,13 @@ class TestPolicyManager:
             "permissions": ["access"],
             "conditions": {},
         }
-        grant = policy_manager.create_grant("register_test", grant_data)
+        grant = policy_manager.create_grant(
+            "register_test",
+            grant_data["grantee_did"], 
+            "test_resource",
+            grant_data["permissions"],
+            grant_data["conditions"]
+        )
 
         result = policy_manager.add_grant(grant)
         assert result is True
@@ -124,11 +135,17 @@ class TestPolicyManager:
             "permissions": ["read", "write"],
             "conditions": {},
         }
-        grant = policy_manager.create_grant("verify_test", grant_data)
+        grant = policy_manager.create_grant(
+            "verify_test",
+            grant_data["grantee_did"],
+            "test_resource", 
+            grant_data["permissions"],
+            grant_data["conditions"]
+        )
         policy_manager.add_grant(grant)
 
         # Test verification
-        result = policy_manager.check_grant("grantee", "read")
+        result = policy_manager.check_grant("verify_test", "grantee", "test_resource", "read")
         assert isinstance(result, bool)
 
     def test_policy_evaluation(self, policy_manager):
@@ -136,13 +153,13 @@ class TestPolicyManager:
         policy = policy_manager.create_policy(
             "eval_test",
             PolicyType.TRUST_THRESHOLD,
-            {"min_trust": 0.8},
+            {"min_reliability": 0.8},
             "Evaluation test",
         )
         policy_manager.add_policy(policy)
 
-        context = {"trust_score": 0.9}
+        context = {"agent_reliability": 0.9}
         result = policy_manager.evaluate_policy(policy["policy_id"], context)
 
-        assert isinstance(result, dict)
-        assert "compliant" in result or "result" in result
+        assert isinstance(result, bool)
+        assert result is True  # Should pass since agent_reliability 0.9 > min_reliability 0.8
